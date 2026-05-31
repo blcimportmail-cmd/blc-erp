@@ -1,11 +1,11 @@
 // Fonction Netlify — proxy sécurisé vers Supabase
-// Gère auth, CRUD et todolist
-
-const SUPABASE_URL   = process.env.SUPAURL;
-const SUPABASE_KEY   = process.env.SUPA_SERVICE_KEY; // service_role key (jamais exposée)
+const SUPABASE_URL = process.env.SUPAURL;
+const SUPABASE_KEY = process.env.SUPA_SERVICE_KEY;
+const crypto = require("crypto");
 
 async function supabaseRequest(path, method = "GET", body = null) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+  const url = `${SUPABASE_URL}/rest/v1/${path}`;
+  const res = await fetch(url, {
     method,
     headers: {
       "apikey": SUPABASE_KEY,
@@ -16,50 +16,48 @@ async function supabaseRequest(path, method = "GET", body = null) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  return { status: res.status, data: text ? JSON.parse(text) : null };
-}
-
-// Simple password hash check (bcrypt via crypto)
-const crypto = require("crypto");
-function hashPassword(password) {
-  return crypto.createHash("sha256").update(password + "BLC_SALT_2024").digest("hex");
+  try { return { status: res.status, data: text ? JSON.parse(text) : null }; }
+  catch(e) { return { status: res.status, data: null }; }
 }
 
 exports.handler = async (event) => {
-  const path = event.path.replace("/.netlify/functions/supabase-proxy", "");
-  const body = event.body ? JSON.parse(event.body) : {};
-
   const headers = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   };
 
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers, body: "" };
 
-  try {
-    // ─── AUTH ────────────────────────────────────────────────
-    if (path === "/auth/login") {
-      const { username, password } = body;
-      const hash = hashPassword(password);
-      const { data } = await supabaseRequest(
-        `blc_users?username=eq.${username.toLowerCase()}&password_hash=eq.${hash}&select=id,username,display_name,role,avatar_color`
-      );
-      if (!data || data.length === 0) return { statusCode: 401, headers, body: JSON.stringify({ error: "Identifiants incorrects" }) };
-      return { statusCode: 200, headers, body: JSON.stringify({ user: data[0] }) };
-    }
+  // Clean path — remove all prefixes
+  let path = event.path
+    .replace("/.netlify/functions/supabase-proxy", "")
+    .replace("/api/supabase", "");
 
-    // ─── GENERIC CRUD ────────────────────────────────────────
-    // GET /data/clients, /data/stock, /data/sales, etc.
+  // Add query string back if present
+  if (event.rawQuery) path = path + "?" + event.rawQuery;
+
+  const body = event.body ? (() => { try { return JSON.parse(event.body); } catch(e) { return {}; } })() : {};
+
+  console.log("supabase-proxy path:", path, "method:", event.httpMethod);
+
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    return { statusCode: 500, headers, body: JSON.stringify({ error: "Variables d'environnement manquantes: SUPAURL ou SUPA_SERVICE_KEY" }) };
+  }
+
+  try {
+    // ─── DATA CRUD ───────────────────────────────────────────
     if (path.startsWith("/data/")) {
-      const table = path.replace("/data/", "").split("?")[0];
-      const query = path.includes("?") ? path.split("?")[1] : "";
-      const allowedTables = ["clients","stock","suppliers","purchases","sales","charges","todos","blc_users","company_info","invoice_counter"];
-      if (!allowedTables.includes(table)) return { statusCode: 403, headers, body: JSON.stringify({ error: "Table non autorisée" }) };
+      const rawTable = path.replace("/data/", "");
+      const table = rawTable.split("?")[0];
+      const query = rawTable.includes("?") ? rawTable.split("?")[1] : "";
+      const allowed = ["clients","stock","suppliers","purchases","sales","charges","todos","blc_users","company_info","invoice_counter"];
+      if (!allowed.includes(table)) return { statusCode: 403, headers, body: JSON.stringify({ error: "Table non autorisée: " + table }) };
 
       if (event.httpMethod === "GET") {
         const { data } = await supabaseRequest(`${table}${query ? "?"+query : "?select=*"}`);
-        return { statusCode: 200, headers, body: JSON.stringify(data) };
+        return { statusCode: 200, headers, body: JSON.stringify(data || []) };
       }
       if (event.httpMethod === "POST") {
         const { data } = await supabaseRequest(table, "POST", body);
@@ -71,14 +69,13 @@ exports.handler = async (event) => {
         return { statusCode: 200, headers, body: JSON.stringify(data) };
       }
       if (event.httpMethod === "DELETE") {
-        const { id } = body;
-        await supabaseRequest(`${table}?id=eq.${id}`, "DELETE");
-        return { statusCode: 200, headers, body: JSON.stringify({ deleted: id }) };
+        await supabaseRequest(`${table}?id=eq.${body.id}`, "DELETE");
+        return { statusCode: 200, headers, body: JSON.stringify({ deleted: body.id }) };
       }
     }
 
-    // ─── NEXT INVOICE NUMBER ─────────────────────────────────
-    if (path === "/invoice/next") {
+    // ─── INVOICE COUNTER ─────────────────────────────────────
+    if (path.startsWith("/invoice/next")) {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/next_invoice_number`, {
         method: "POST",
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
@@ -88,8 +85,9 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers, body: JSON.stringify({ invoiceNum: num }) };
     }
 
-    return { statusCode: 404, headers, body: JSON.stringify({ error: "Route inconnue" }) };
+    return { statusCode: 404, headers, body: JSON.stringify({ error: "Route inconnue: " + path }) };
   } catch (err) {
+    console.error("supabase-proxy error:", err);
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
   }
 };
