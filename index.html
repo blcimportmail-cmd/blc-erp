@@ -746,10 +746,9 @@ function changeStatus(id,newStatus){
   renderAchats();
   notify(`✅ ${STATUS[newStatus]?.icon} ${STATUS[newStatus]?.label}`);
   const updatedP=purchases.find(p=>p.id===id);
-  if(updatedP) savePurchase(updatedP);
-  // update stock in DB
+  if(updatedP) dbPatch("purchases",{id:updatedP.id,stock_status:newStatus});
   const lns=updatedP?._lines||[];
-  lns.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)saveStock(s);}});
+  lns.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:new Date().toISOString().split("T")[0]});}});
 }
 function addStockFromPurchase(p){
   const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,qty:p.qty}];
@@ -1183,13 +1182,13 @@ function submitSale(){
   });
 
   if(clientObj)clients=clients.map(c=>c.id===clientObj.id?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
+  // Save to Supabase
+  const saleRow={invoice_num:ns.invoiceNum,global_seq:ns.globalSeq,client_id:ns.clientId||null,client_name:ns.client,product:ns.product,lines:ns._lines||[],qty:ns.qty,unit_ht:ns.unitHT,shipping:ns.shipping||0,total_ttc:ns.totalTTC,date:ns.date,source:"manual",linked_stock_id:ns.linkedStockId||null};
+  dbPost("sales",saleRow).then(r=>{if(r&&r[0])ns.id=r[0].id;});
+  lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)dbPatch("stock",{id:s.id,qty:s.qty,unit_cost_ht:s.unitCostHT,last_update:ns.date,name:s.name,reserved:s.reserved||0,shopify_linked:s.shopifyLinked||false});}});
+  if(clientObj){const cl=clients.find(c=>c.id===clientObj.id);if(cl)dbPatch("clients",{id:cl.id,total_purchases:cl.totalPurchases});}
   closeModal();renderVentes();
   notify(`✅ Vente ${num} · ${lines.length} produit${lines.length>1?"s":""} · ${fmtEur(ttc)}`);
-  ns._isNew=true; saveSale(ns);
-  // update stock in DB
-  lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)saveStock(s);}});
-  // update client total in DB
-  if(clientObj){const cl=clients.find(c=>c.id===clientObj.id);if(cl)saveClient(cl);}
 }
 
 // ═══════════════════════════ MODALS — ACHAT (multiproduits) ══════════════════
@@ -1356,10 +1355,14 @@ function submitPurchase(){
     });
   }
 
+  // Save to Supabase
+  const purchRow={supplier_id:np.supplierId||null,supplier_name:np.supplier,description:np.description,lines:np._lines||[],qty:np.qty,unit_ht:np.unitHT||0,amount_ht:np.amountHT,date:np.date,has_invoice:np.hasInvoice||false,invoice_file:np.invoiceFile||null,stock_status:np.stockStatus,linked_stock_id:np.linkedStockId||null};
+  dbPost("purchases",purchRow).then(r=>{if(r&&r[0])np.id=r[0].id;});
+  if(status==="local") lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:np.date});}});
+  // Save new supplier if created
+  if(supSel==="__new__"&&supplierId){const sup=suppliers.find(x=>x.id===supplierId);if(sup)dbPost("suppliers",{name:sup.name,contact:sup.contact||null,email:sup.email||null,phone:sup.phone||null}).then(r=>{if(r&&r[0])sup.id=r[0].id;});}
   closeModal();renderAchats();renderStock();
   notify(`✅ Achat enregistré · ${lines.length} produit${lines.length>1?"s":""} · ${fmtEur(totalHT)} HT`);
-  np._isNew=true; savePurchase(np);
-  if(status==="local") lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)saveStock(s);}});
 }
 
 // ═══════════════════════════ MODALS — CLIENT ══════════════════════════════════
@@ -1380,12 +1383,19 @@ function _openClientModal(c){
   </div></div>`);
 }
 function openAddClient(){_openClientModal(null);}
-function submitClient(id){
+async function submitClient(id){
   const name=document.getElementById("cl-name").value.trim();
   if(!name){notify("⚠ Nom obligatoire");return;}
   const data={name,address:document.getElementById("cl-addr").value.trim(),siret:document.getElementById("cl-siret").value.trim(),tvaIntra:document.getElementById("cl-tva").value.trim(),email:document.getElementById("cl-email").value.trim(),phone:document.getElementById("cl-phone").value.trim()};
-  if(id){clients=clients.map(c=>c.id===id?{...c,...data}:c);}
-  else{clients=[...clients,{id:Date.now(),...data,totalPurchases:0}];}
+  if(id){
+    clients=clients.map(c=>c.id===id?{...c,...data}:c);
+    await dbPatch("clients",{id,...data,zip_city:"",tva_intra:data.tvaIntra,total_purchases:clients.find(c=>c.id===id)?.totalPurchases||0});
+  } else {
+    const row={name:data.name,address:data.address,zip_city:"",siret:data.siret,tva_intra:data.tvaIntra,email:data.email,phone:data.phone,total_purchases:0};
+    const result=await dbPost("clients",row);
+    const newId=result&&result[0]?result[0].id:("tmp-"+Date.now());
+    clients=[...clients,{id:newId,...data,totalPurchases:0}];
+  }
   closeModal();renderClients("");
   notify(`✅ Client "${name}" ${id?"mis à jour":"créé"}`);
 }
@@ -1410,11 +1420,18 @@ function submitStock(id){
   const cost=parseFloat(document.getElementById("sk-cost").value)||0;
   const linked=document.getElementById("sk-linked").checked;
   const today=new Date().toISOString().split("T")[0];
-  let stockItem;
-  if(id){stock=stock.map(s=>s.id===id?(stockItem={...s,name,qty,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today}):s);}
-  else{stockItem={id:"tmp-"+Date.now(),name,qty,reserved:0,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today,_isNew:true};stock=[...stock,stockItem];}
+  if(id){
+    stock=stock.map(s=>s.id===id?{...s,name,qty,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today}:s);
+    dbPatch("stock",{id,name,qty,reserved:0,unit_cost_ht:cost,shopify_linked:linked,last_update:today});
+  } else {
+    const row={name,qty,reserved:0,unit_cost_ht:cost,shopify_linked:linked,last_update:today};
+    dbPost("stock",row).then(r=>{
+      const newId=r&&r[0]?r[0].id:("tmp-"+Date.now());
+      stock=[...stock.filter(s=>s.name!==name),{id:newId,name,qty,reserved:0,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today}];
+      renderStock();
+    });
+  }
   closeModal();renderStock();notify("✅ Stock mis à jour");
-  saveStock(stockItem);
 }
 
 // ═══════════════════════════ MODALS — CHARGE ══════════════════════════════════
@@ -1447,9 +1464,15 @@ function submitCharge(id){
   const name=document.getElementById("ch-name").value.trim();
   if(!name){notify("⚠ Nom obligatoire");return;}
   const ch={id:id||Date.now(),name,type:document.getElementById("ch-type").value,category:document.getElementById("ch-cat").value.trim(),amountHT:parseFloat(document.getElementById("ch-amount").value)||0,period:document.getElementById("ch-period").value,note:document.getElementById("ch-note").value.trim(),active:document.getElementById("ch-active").checked};
-  if(id)charges=charges.map(x=>x.id===id?ch:x);else{ch._isNew=true;charges=[...charges,ch];}
+  if(id){
+    charges=charges.map(x=>x.id===id?ch:x);
+    dbPatch("charges",{id,name:ch.name,type:ch.type,category:ch.category,amount_ht:ch.amountHT,period:ch.period,note:ch.note,active:ch.active});
+  } else {
+    const row={name:ch.name,type:ch.type,category:ch.category,amount_ht:ch.amountHT,period:ch.period,note:ch.note,active:ch.active};
+    dbPost("charges",row).then(r=>{const newId=r&&r[0]?r[0].id:ch.id;ch.id=newId;charges=[...charges.filter(x=>x.id!==ch.id),ch];renderCharges();});
+    charges=[...charges,ch];
+  }
   closeModal();renderCharges();notify(`✅ Charge "${name}" ${id?"mise à jour":"créée"}`);
-  saveCharge(ch);
 }
 
 // ═══════════════════════════ MODALS — FACTURE DIRECTE ═════════════════════════
@@ -1611,7 +1634,7 @@ function openCompanySettings(){
 function submitCompanySettings(){
   companyInfo={name:document.getElementById("ci-name").value,legalForm:document.getElementById("ci-form").value,capital:document.getElementById("ci-capital").value,rcs:document.getElementById("ci-rcs").value,siret:document.getElementById("ci-siret").value,tvaIntra:document.getElementById("ci-tva").value,address:document.getElementById("ci-addr").value,zipCity:document.getElementById("ci-city").value,phone:document.getElementById("ci-phone").value,email:document.getElementById("ci-email").value,website:document.getElementById("ci-web").value,iban:document.getElementById("ci-iban").value,bic:document.getElementById("ci-bic").value,bank:document.getElementById("ci-bank").value,paymentTerms:document.getElementById("ci-delay").value,lateInterest:"3 fois le taux légal",recoveryFee:"40"};
   closeModal();notify("✅ Informations entreprise sauvegardées");
-  saveCompanyInfo();
+  dbPatch("company_info",{id:1,name:companyInfo.name,legal_form:companyInfo.legalForm,address:companyInfo.address,zip_city:companyInfo.zipCity,siret:companyInfo.siret,tva_intra:companyInfo.tvaIntra,capital:companyInfo.capital,rcs:companyInfo.rcs,email:companyInfo.email,phone:companyInfo.phone,website:companyInfo.website,iban:companyInfo.iban,bic:companyInfo.bic,bank:companyInfo.bank,payment_terms:companyInfo.paymentTerms,late_interest:companyInfo.lateInterest,recovery_fee:companyInfo.recoveryFee});
 }
 // ═══════════════════════════ SHOPIFY API ═════════════════════════════════════
 // Toutes les requêtes Shopify passent par le proxy Netlify /api/shopify/
@@ -2038,8 +2061,14 @@ function submitTodo(id){
     is_global:!assigned,
     created_at:new Date().toISOString(),
   };
-  if(id){todos=todos.map(x=>x.id===id?{...x,...t}:x);saveTodo(t);}
-  else{t._isNew=true;todos=[t,...todos];saveTodo(t);}
+  const row={title:t.title,description:t.description||null,assigned_to:t.assigned_to||null,created_by:t.created_by||null,due_date:t.due_date||null,priority:t.priority,status:t.status,is_global:t.is_global||false};
+  if(id){
+    todos=todos.map(x=>x.id===id?{...x,...t}:x);
+    dbPatch("todos",{id,...row});
+  } else {
+    todos=[t,...todos];
+    dbPost("todos",row).then(r=>{const newId=r&&r[0]?r[0].id:t.id;t.id=newId;todos=todos.map(x=>x.id===t.id?{...x,id:newId}:x);});
+  }
   closeModal();renderTodo();
   notify(`✅ Tâche "${title}" ${id?"mise à jour":"créée"}${t.assigned_to?` → ${allUsers.find(u=>u.id===t.assigned_to)?.display_name}`:" (globale)"}`);
 }
