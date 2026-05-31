@@ -1,0 +1,2174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BLC Import — ERP Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --navy:#0F1535;--orange:#F47920;--orange-pale:#fff4ec;
+  --bg:#f2f3f7;--card:#ffffff;--border:#e4e6ef;
+  --muted:#7a7f96;--light:#b0b4c8;
+  --green:#16a34a;--green-pale:#f0fdf4;
+  --red:#dc2626;--red-pale:#fef2f2;
+  --yellow:#d97706;--yellow-pale:#fffbeb;
+  --blue:#2563eb;--blue-pale:#eff6ff;
+}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--navy);min-height:100vh;display:flex}
+.sidebar{width:220px;min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50}
+.logo{padding:24px 20px 20px;border-bottom:1px solid rgba(255,255,255,0.07)}
+.logo-name{font-size:24px;font-weight:900;color:#fff;letter-spacing:-0.5px}
+.logo-name span{color:var(--orange)}
+.logo-sub{font-size:9px;color:rgba(255,255,255,0.2);letter-spacing:2.5px;text-transform:uppercase;margin-top:3px}
+nav{flex:1;padding:14px 0;overflow-y:auto}
+.nav-item{width:100%;display:flex;align-items:center;gap:10px;padding:11px 20px;background:transparent;border:none;border-left:3px solid transparent;color:rgba(255,255,255,0.35);font-size:13px;font-weight:700;cursor:pointer;text-align:left;font-family:'Barlow',sans-serif;transition:all 0.15s}
+.nav-item:hover{color:rgba(255,255,255,0.65);background:rgba(255,255,255,0.04)}
+.nav-item.active{color:var(--orange);background:rgba(244,121,32,0.1);border-left-color:var(--orange)}
+.dicta-wrap{padding:14px 16px;border-top:1px solid rgba(255,255,255,0.07)}
+.dicta-btn{width:100%;background:var(--orange);border:none;border-radius:10px;padding:13px;color:#fff;font-weight:800;font-size:13px;cursor:pointer;font-family:'Barlow',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(244,121,32,0.28);transition:all 0.15s}
+.dicta-btn:hover{background:#ff8f35;transform:translateY(-1px)}
+.main{margin-left:220px;flex:1;padding:36px;min-height:100vh}
+.page{display:none}.page.active{display:block;animation:fadein 0.18s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.page-hdr{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px}
+.page-title{font-size:30px;font-weight:900;color:var(--navy);letter-spacing:-0.5px}
+.page-sub{color:var(--muted);font-size:13px;margin-top:3px}
+.kpi-row{display:grid;gap:16px;margin-bottom:22px}
+.kpi-row-5{grid-template-columns:repeat(5,1fr)}
+.kpi-row-3{grid-template-columns:repeat(3,1fr)}
+.kpi{border-radius:14px;padding:20px 18px;position:relative;overflow:hidden}
+.kpi.accent{background:var(--navy);box-shadow:0 6px 24px rgba(244,121,32,0.14)}
+.kpi.plain{background:var(--card);border:1px solid var(--border)}
+.kpi-orb{position:absolute;top:-24px;right:-24px;width:90px;height:90px;border-radius:50%;background:rgba(244,121,32,0.09)}
+.kpi-icon{font-size:18px;margin-bottom:10px}
+.kpi-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px}
+.kpi.accent .kpi-label{color:rgba(255,255,255,0.38)}.kpi.plain .kpi-label{color:var(--light)}
+.kpi-val{font-size:26px;font-weight:900;letter-spacing:-0.5px;line-height:1}
+.kpi.accent .kpi-val{color:var(--orange)}.kpi.plain .kpi-val{color:var(--navy)}
+.kpi-sub{font-size:11px;margin-top:5px}
+.kpi.accent .kpi-sub{color:rgba(255,255,255,0.28)}.kpi.plain .kpi-sub{color:var(--light)}
+.card{background:var(--card);border-radius:14px;border:1px solid var(--border);padding:22px}
+.card-title{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:16px}
+.tbl-wrap{background:var(--card);border-radius:14px;border:1px solid var(--border);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead tr{background:#f7f8fc}
+th{padding:11px 16px;text-align:left;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:13px 16px;font-size:13px;border-bottom:1px solid #f7f8fc;vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafbfd}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap}
+.bg{background:var(--green-pale);color:var(--green)}.br{background:var(--red-pale);color:var(--red)}
+.bo{background:var(--orange-pale);color:#c45e0a}.by{background:var(--yellow-pale);color:var(--yellow)}
+.bb{background:var(--blue-pale);color:var(--blue)}.bx{background:#f0f0f5;color:var(--muted)}
+.btn{border-radius:9px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;font-family:'Barlow',sans-serif;border:none;transition:all 0.13s;white-space:nowrap}
+.btn-primary{background:var(--orange);color:#fff}.btn-primary:hover{background:#ff8f35}
+.btn-secondary{background:#f0f1f6;color:var(--navy);border:1px solid var(--border)}.btn-secondary:hover{background:#e8eaf2}
+.btn-ghost{background:transparent;color:var(--orange);border:1.5px solid var(--orange)}.btn-ghost:hover{background:var(--orange-pale)}
+.btn-danger{background:var(--red-pale);color:var(--red);border:1px solid #fecaca}.btn-danger:hover{background:#fee2e2}
+.btn-sm{padding:5px 10px;font-size:11px;border-radius:7px}
+.status-sel{border:1.5px solid var(--border);border-radius:8px;padding:5px 9px;font-size:11px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;outline:none;background:var(--card)}
+.status-sel.sp{background:var(--yellow-pale);color:var(--yellow);border-color:#fde68a}
+.status-sel.sl{background:var(--blue-pale);color:var(--blue);border-color:#bfdbfe}
+.status-sel.so{background:var(--green-pale);color:var(--green);border-color:#bbf7d0}
+.spark-bars{display:flex;align-items:flex-end;gap:5px;height:68px}
+.spark-bar{flex:1;border-radius:4px 4px 0 0;min-height:4px;transition:height 0.3s ease}
+.spark-labels{display:flex;gap:5px;margin-top:5px}
+.spark-lbl{flex:1;font-size:9px;color:var(--light);text-align:center;font-weight:600}
+.rep-row{margin-bottom:14px}
+.rep-hdr{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px}
+.rep-hdr span:first-child{color:var(--muted);font-weight:600}
+.rep-hdr span:last-child{color:var(--navy);font-weight:800}
+.rep-track{height:7px;background:#e8eaf0;border-radius:99px;overflow:hidden}
+.rep-fill{height:100%;border-radius:99px}
+.tc-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.tc-row:last-child{border-bottom:none}
+.avatar{width:34px;height:34px;border-radius:9px;background:var(--navy);display:flex;align-items:center;justify-content:center;color:var(--orange);font-weight:900;font-size:13px;flex-shrink:0}
+.overlay{position:fixed;inset:0;background:rgba(15,21,53,0.5);backdrop-filter:blur(3px);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:#fff;border-radius:18px;padding:30px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(15,21,53,0.18)}
+.modal-wide{max-width:580px}
+.modal-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+.modal-title{font-size:18px;font-weight:800;color:var(--navy)}
+.modal-close{background:#f0f1f6;border:none;border-radius:7px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--muted)}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.input{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;font-size:13px;color:var(--navy);outline:none;font-family:'Barlow',sans-serif;background:#fff;transition:border-color 0.13s}
+.input:focus{border-color:var(--orange)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ttc-prev{background:var(--orange-pale);border-radius:9px;padding:11px 13px;font-size:13px;color:#c45e0a;margin-bottom:13px}
+.sub-box{background:#f7f8fc;border-radius:10px;padding:14px;margin-bottom:13px}
+.sub-box-title{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:10px}
+.toast{position:fixed;top:18px;right:18px;background:var(--navy);color:var(--orange);padding:12px 20px;border-radius:10px;font-weight:700;font-size:12px;z-index:999;box-shadow:0 8px 28px rgba(15,21,53,0.22);animation:fadein 0.18s ease;pointer-events:none}
+.search-input{border:1.5px solid var(--border);border-radius:9px;padding:9px 13px;font-size:13px;color:var(--navy);outline:none;font-family:'Barlow',sans-serif;width:220px;transition:border-color 0.13s}
+.search-input:focus{border-color:var(--orange)}
+hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
+.empty-state{padding:60px 0;text-align:center;color:var(--light);font-size:14px}
+.todo-col{background:var(--card);border-radius:14px;border:1px solid var(--border);overflow:hidden}
+.todo-col-hdr{padding:14px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.todo-card{padding:14px 16px;border-bottom:1px solid #f7f8fc;cursor:pointer;transition:background 0.1s}
+.todo-card:last-child{border-bottom:none}
+.todo-card:hover{background:#fafbfd}
+.todo-priority-high{border-left:3px solid var(--red)}
+.todo-priority-urgent{border-left:3px solid #9333ea}
+.todo-priority-normal{border-left:3px solid var(--orange)}
+.todo-priority-low{border-left:3px solid var(--light)}
+.preset-btn{background:#f7f8fc;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;font-family:'Barlow',sans-serif;transition:all 0.13s;text-align:center}
+.preset-btn:hover{background:var(--orange-pale);color:var(--orange);border-color:var(--orange)}
+.preset-btn.active{background:var(--orange);color:#fff;border-color:var(--orange)}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="logo">
+    <div class="logo-name">BL<span>C</span> <span style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.35);letter-spacing:3px">IMPORT</span></div>
+    <div class="logo-sub">ERP Pro</div>
+  </div>
+  <nav>
+    <button class="nav-item active" onclick="goTo('dashboard')"><span>◉</span>Dashboard</button>
+    <button class="nav-item" onclick="goTo('ventes')"><span>↑</span>Ventes</button>
+    <button class="nav-item" onclick="goTo('achats')"><span>↓</span>Achats</button>
+    <button class="nav-item" onclick="goTo('charges')"><span>💸</span>Charges</button>
+    <button class="nav-item" onclick="goTo('stock')"><span>📦</span>Stock</button>
+    <button class="nav-item" onclick="goTo('clients')"><span>👥</span>Clients</button>
+    <button class="nav-item" onclick="goTo('factures')"><span>🧾</span>Factures</button>
+    <button class="nav-item" onclick="goTo('todo')"><span>✅</span>To-do</button>
+  </nav>
+  <div id="user-bar" style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.07);display:none">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <div id="user-avatar" style="width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;flex-shrink:0"></div>
+      <div><div id="user-name" style="font-size:13px;font-weight:700;color:#fff"></div><div id="user-role" style="font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:1px"></div></div>
+      <button onclick="logout()" style="margin-left:auto;background:rgba(255,255,255,0.08);border:none;border-radius:6px;padding:4px 8px;font-size:10px;color:rgba(255,255,255,0.4);cursor:pointer;font-family:'Barlow',sans-serif">Déco</button>
+    </div>
+  </div>
+  <div class="dicta-wrap">
+    <button class="dicta-btn" onclick="openDicta()">🎙 Dictaphone IA</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-hdr">
+      <div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--light);margin-bottom:4px">BLC IMPORT</div>
+        <div class="page-title">Tableau de bord</div>
+        <div class="page-sub" id="dash-date"></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <!-- Date range picker dropdown -->
+        <div style="position:relative" id="date-picker-wrap">
+          <button onclick="toggleDatePicker()" id="date-picker-btn" style="display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--border);border-radius:11px;padding:9px 16px;cursor:pointer;font-family:'Barlow',sans-serif;font-size:13px;font-weight:700;color:var(--navy);min-width:280px;justify-content:space-between">
+            <span style="display:flex;align-items:center;gap:7px"><span style="font-size:15px">📅</span><span id="date-picker-label">Ce mois</span></span>
+            <span style="color:var(--light);font-size:11px">▾</span>
+          </button>
+          <div id="date-picker-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 6px);background:#fff;border:1.5px solid var(--border);border-radius:14px;box-shadow:0 8px 32px rgba(15,21,53,0.13);z-index:500;width:340px;padding:14px">
+            <!-- Presets -->
+            <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:8px">Raccourcis</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px">
+              <button onclick="setPreset('today')"    class="preset-btn" id="pr-today">Aujourd'hui</button>
+              <button onclick="setPreset('week')"     class="preset-btn" id="pr-week">Cette semaine</button>
+              <button onclick="setPreset('month')"    class="preset-btn" id="pr-month">Ce mois</button>
+              <button onclick="setPreset('lastmonth')"class="preset-btn" id="pr-lastmonth">Mois précédent</button>
+              <button onclick="setPreset('quarter')"  class="preset-btn" id="pr-quarter">Ce trimestre</button>
+              <button onclick="setPreset('year')"     class="preset-btn" id="pr-year">Cette année</button>
+              <button onclick="setPreset('lastyear')" class="preset-btn" id="pr-lastyear">Année préc.</button>
+              <button onclick="setPreset('all')"      class="preset-btn" id="pr-all" style="grid-column:span 2">Toutes les données</button>
+            </div>
+            <!-- Custom range -->
+            <div style="border-top:1px solid var(--border);padding-top:12px">
+              <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:8px">Plage personnalisée</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">Du</div>
+                  <input type="date" id="dash-from" onchange="setDashRange()" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--navy);outline:none;font-family:'Barlow',sans-serif"/>
+                </div>
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">Au</div>
+                  <input type="date" id="dash-to" onchange="setDashRange()" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--navy);outline:none;font-family:'Barlow',sans-serif"/>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="openCompanySettings()">🏢 Mon entreprise</button>
+        <button class="btn btn-secondary" onclick="openShopifyConfig()" id="shopify-btn">⚙ Shopify</button>
+      </div>
+    </div>
+    <div class="kpi-row kpi-row-5" id="kpi-row"></div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div class="card-title" id="spark-title">CA sur la période</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+          <div style="font-size:22px;font-weight:900;color:var(--navy)" id="spark-total">—</div>
+          <div style="font-size:12px;color:var(--muted)" id="spark-period-label">—</div>
+        </div>
+        <div class="spark-bars" id="spark-bars"></div>
+        <div class="spark-labels" id="spark-labels"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Répartition CA</div>
+        <div class="rep-row">
+          <div class="rep-hdr"><span>🛍 Shopify</span><span id="rep-sh">—</span></div>
+          <div class="rep-track"><div class="rep-fill" id="rep-sh-bar" style="background:var(--navy)"></div></div>
+        </div>
+        <div class="rep-row">
+          <div class="rep-hdr"><span>🧾 Hors site</span><span id="rep-mn">—</span></div>
+          <div class="rep-track"><div class="rep-fill" id="rep-mn-bar" style="background:var(--orange)"></div></div>
+        </div>
+        <hr class="div"/>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Résultat net / CA : <b style="color:var(--navy)" id="rep-marge">—</b></div>
+        <div style="font-size:12px;color:var(--muted)">Charges / mois : <b style="color:var(--red)" id="rep-charges">—</b></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card" style="flex:1">
+          <div class="card-title">Clients uniques</div>
+          <div style="font-size:32px;font-weight:900;color:var(--orange)" id="d-clients">0</div>
+          <div style="font-size:11px;color:var(--light);margin-top:4px">base de données</div>
+        </div>
+        <div class="card" style="flex:1;background:var(--navy);border:none">
+          <div class="card-title" style="color:rgba(255,255,255,0.35)">Valeur stock local HT</div>
+          <div style="font-size:20px;font-weight:900;color:var(--orange)" id="d-stock">0 €</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.28);margin-top:4px">prix d'achat</div>
+        </div>
+      </div>
+    </div>
+    <div class="card"><div class="card-title">Top clients</div><div id="top-clients"><div class="empty-state">Aucun client encore</div></div></div>
+  </div>
+
+  <!-- VENTES -->
+  <div class="page" id="page-ventes">
+    <div class="page-hdr">
+      <div><div class="page-title">Ventes</div><div class="page-sub">Shopify + hors site · numérotation globale</div></div>
+      <button class="btn btn-primary" onclick="openAddSale()">+ Nouvelle vente</button>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>N° Facture</th><th>Client</th><th>Produit</th><th>Qté</th><th>Montant TTC</th><th id="ventes-date-th" style="cursor:pointer">Date ↓</th><th>Source</th><th>Facture</th></tr></thead>
+      <tbody id="ventes-body"><tr><td colspan="8" class="empty-state">Aucune vente enregistrée</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- ACHATS -->
+  <div class="page" id="page-achats">
+    <div class="page-hdr">
+      <div><div class="page-title">Achats & Charges</div><div class="page-sub" id="achats-sub">—</div></div>
+      <button class="btn btn-primary" onclick="openAddPurchase()">+ Nouvel achat</button>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Fournisseur</th><th>Description</th><th>Produit lié</th><th>Quantité</th><th>Prix unit. HT</th><th>Total HT</th><th id="achats-date-th" style="cursor:pointer">Date ↓</th><th>Statut stock</th><th>Facture</th><th>Supprimer</th></tr></thead>
+      <tbody id="achats-body"><tr><td colspan="10" class="empty-state">Aucun achat enregistré</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- CLIENTS -->
+  <div class="page" id="page-clients">
+    <div class="page-hdr">
+      <div><div class="page-title">Clients</div><div class="page-sub" id="clients-sub">—</div></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input class="search-input" placeholder="Rechercher…" oninput="renderClients(this.value)"/>
+        <button class="btn btn-primary" onclick="openAddClient()">+ Nouveau client</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Nom / Entreprise</th><th>Adresse</th><th>SIRET</th><th>N° TVA</th><th>Email</th><th>Téléphone</th><th>CA total</th><th>Action</th></tr></thead>
+      <tbody id="clients-body"><tr><td colspan="8" class="empty-state">Aucun client enregistré</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- STOCK -->
+  <div class="page" id="page-stock">
+    <div class="page-hdr">
+      <div><div class="page-title">Stock</div><div class="page-sub" id="stock-sub">—</div></div>
+      <button class="btn btn-primary" onclick="openAddStock(null)">+ Ajouter produit</button>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Produit</th><th>Stock dispo</th><th>Réservé</th><th>Coût unit. HT</th><th>Valeur HT</th><th>Shopify</th><th>MAJ</th><th>Action</th></tr></thead>
+      <tbody id="stock-body"><tr><td colspan="8" class="empty-state">Aucun produit en stock</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- CHARGES -->
+  <div class="page" id="page-charges">
+    <div class="page-hdr">
+      <div><div class="page-title">Charges</div><div class="page-sub" id="charges-sub">—</div></div>
+      <button class="btn btn-primary" onclick="openAddCharge(null)">+ Ajouter une charge</button>
+    </div>
+    <div class="kpi-row kpi-row-3" id="charges-kpis"></div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Nom</th><th>Type</th><th>Périodicité</th><th>Montant HT</th><th>Équiv. / mois HT</th><th>Catégorie</th><th>Note</th><th>Actif</th><th>Action</th></tr></thead>
+      <tbody id="charges-body"><tr><td colspan="9" class="empty-state">Aucune charge enregistrée</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- FACTURES -->
+  <div class="page" id="page-factures">
+    <div class="page-hdr">
+      <div><div class="page-title">Factures</div><div class="page-sub" id="fac-sub">Numérotation séquentielle automatique</div></div>
+      <button class="btn btn-primary" onclick="openCreateInvoice()">+ Créer une facture</button>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>N° Facture</th><th>Client</th><th>Produit</th><th>Montant TTC</th><th>Date</th><th>Source</th><th>Actions</th></tr></thead>
+      <tbody id="inv-body"><tr><td colspan="7" class="empty-state">Aucune facture</td></tr></tbody></table>
+    </div>
+  </div>
+
+
+  <!-- TODO -->
+  <div class="page" id="page-todo">
+    <div class="page-hdr">
+      <div><div class="page-title">To-do</div><div class="page-sub" id="todo-sub">—</div></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" id="todo-filter-all" onclick="setTodoFilter('all')" style="font-size:12px">Toutes</button>
+        <button class="btn btn-secondary" id="todo-filter-mine" onclick="setTodoFilter('mine')" style="font-size:12px">Les miennes</button>
+        <button class="btn btn-secondary" id="todo-filter-global" onclick="setTodoFilter('global')" style="font-size:12px">Globales</button>
+        <button class="btn btn-primary" onclick="openAddTodo()">+ Nouvelle tâche</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px" id="todo-board"></div>
+  </div>
+
+</div>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay" style="position:fixed;inset:0;background:var(--navy);z-index:9999;display:flex;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:20px;padding:40px;width:100%;max-width:380px;box-shadow:0 24px 80px rgba(0,0,0,0.3);text-align:center">
+    <div style="font-size:28px;font-weight:900;color:var(--navy);margin-bottom:4px">BL<span style="color:var(--orange)">C</span> <span style="font-size:14px;letter-spacing:3px;color:rgba(15,21,53,0.4)">IMPORT</span></div>
+    <div style="font-size:11px;color:var(--light);letter-spacing:2px;text-transform:uppercase;margin-bottom:32px">ERP Pro</div>
+    <div id="login-error" style="display:none;background:var(--red-pale);color:var(--red);border-radius:9px;padding:10px;margin-bottom:16px;font-size:13px;font-weight:600"></div>
+    <div class="field" style="text-align:left"><label>Identifiant</label><input class="input" id="login-user" placeholder="Ex: barto" style="text-transform:lowercase"/></div>
+    <div class="field" style="text-align:left"><label>Mot de passe</label><input class="input" type="password" id="login-pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitLogin()"/></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="submitLogin()">Se connecter</button>
+    <div style="margin-top:20px;font-size:11px;color:var(--light)">Accès réservé à l'équipe BLC Import</div>
+  </div>
+</div>
+
+<div id="modal-area"></div>
+<div id="toast-area"></div>
+
+<script>
+// ═══════════════════════════ AUTH STATE ══════════════════════════════════════
+let currentUser = null; // {id, username, display_name, role, avatar_color}
+let todos = [];
+let allUsers = [
+  {id:"u1",username:"barto",   display_name:"Barto",    role:"admin",         avatar_color:"#F47920"},
+  {id:"u2",username:"coco",    display_name:"Coco",     role:"collaborateur", avatar_color:"#2563eb"},
+  {id:"u3",username:"louis",   display_name:"Louis",    role:"collaborateur", avatar_color:"#16a34a"},
+  {id:"u4",username:"thibault",display_name:"Thibault", role:"collaborateur", avatar_color:"#8b5cf6"},
+];
+let todoFilter = "all"; // all | mine | global
+
+// ═══════════════════════════ STATE ═══════════════════════════════════════════
+let globalInvCounter = 0;
+let shopify    = [];
+let sales      = [];
+let purchases  = [];
+let clients    = [];
+let stock      = [];
+let charges    = [];
+let suppliers  = [];
+let shopifyConfig = {domain:"",apiKey:""};
+let companyInfo = {
+  name:"BLC Import",legalForm:"SAS",address:"",zipCity:"",siret:"",tvaIntra:"",
+  capital:"",rcs:"",email:"",phone:"",website:"",iban:"",bic:"",bank:"",
+  paymentTerms:"30",lateInterest:"3 fois le taux légal",recoveryFee:"40",
+};
+
+// Sort & filter state
+let sortVentes = "date_desc";   // date_desc | date_asc
+let sortAchats = "date_desc";
+let dashFrom   = "";  // YYYY-MM-DD
+let dashTo     = "";  // YYYY-MM-DD
+let dashInitDone = false;
+let _lineCounter = 0; // unique IDs for modal lines
+
+const STATUS = {
+  preparation:{label:"En préparation",icon:"⏳",bc:"by",sc:"sp"},
+  livraison:  {label:"En livraison",  icon:"🚚",bc:"bb",sc:"sl"},
+  local:      {label:"Au local",      icon:"📦",bc:"bg",sc:"so"},
+};
+
+// ═══════════════════════════ HELPERS ═════════════════════════════════════════
+const fmtDate = d => new Date(d).toLocaleDateString("fr-FR");
+const fmtEur  = n => Number(n).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
+const nextFAC = () => { globalInvCounter++; return `FAC-${String(globalInvCounter).padStart(3,"0")}`; };
+const badge   = (t,c) => `<span class="badge ${c}">${t}</span>`;
+const stockColor = q => q<50?"var(--red)":q<150?"var(--yellow)":"var(--green)";
+
+function notify(msg){
+  const t=document.createElement("div");t.className="toast";t.textContent=msg;
+  document.getElementById("toast-area").appendChild(t);
+  setTimeout(()=>t.remove(),3200);
+}
+function closeModal(){document.getElementById("modal-area").innerHTML="";}
+function showModal(html){document.getElementById("modal-area").innerHTML=html;}
+
+// ═══════════════════════════ NAVIGATION ══════════════════════════════════════
+function goTo(id){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.remove("active"));
+  document.getElementById("page-"+id).classList.add("active");
+  document.querySelector(`.nav-item[onclick="goTo('${id}')"]`).classList.add("active");
+  ({dashboard:renderDashboard,ventes:renderVentes,achats:renderAchats,clients:()=>renderClients(""),stock:renderStock,charges:renderCharges,factures:renderFactures,todo:renderTodo}[id]||renderDashboard)();
+}
+
+// ═══════════════════════════ BÉNÉFICE PAR PRODUIT ════════════════════════════
+function calcBenefice(){
+  let total=0;
+  [...sales,...shopify.filter(o=>o.status==="paid")].forEach(s=>{
+    const unitSaleHT=s.unitHT||(s.totalTTC/1.2/(s.qty||1));
+    const qty=s.qty||1;
+    let cost=0;
+    if(s.linkedStockId){const p=stock.find(x=>x.id===s.linkedStockId);cost=p?.unitCostHT||0;}
+    else{const p=stock.find(x=>s.product.toLowerCase().includes(x.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));cost=p?.unitCostHT||0;}
+    total+=qty*(unitSaleHT-cost);
+  });
+  return total;
+}
+
+// ═══════════════════════════ FACTURE SÉQUENTIELLE ════════════════════════════
+function resequenceInvoices(){
+  const all=[...sales.map(s=>({...s,_t:"manual"})),...shopify.map(s=>({...s,_t:"shopify"}))].sort((a,b)=>new Date(a.date)-new Date(b.date)||(a.globalSeq||0)-(b.globalSeq||0));
+  let seq=0;
+  all.forEach(item=>{
+    seq++;
+    const num=`FAC-${String(seq).padStart(3,"0")}`;
+    if(item._t==="manual") sales=sales.map(s=>s.id===item.id?{...s,invoiceNum:num,globalSeq:seq}:s);
+    else shopify=shopify.map(s=>s.id===item.id?{...s,invoiceNum:num,globalSeq:seq}:s);
+  });
+  globalInvCounter=seq;
+}
+
+// ═══════════════════════════ DASHBOARD ═══════════════════════════════════════
+function isoDate(d){return d.toISOString().split("T")[0];}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+
+let activePreset = "month"; // track which preset is active
+
+function daysInMonth(year,month){return new Date(year,month,0).getDate();} // month 1-12
+
+function toggleDatePicker(){
+  const dd=document.getElementById("date-picker-dropdown");
+  dd.style.display=dd.style.display==="none"?"block":"none";
+}
+// Close picker when clicking outside
+document.addEventListener("click",function(e){
+  const wrap=document.getElementById("date-picker-wrap");
+  if(wrap&&!wrap.contains(e.target)){
+    const dd=document.getElementById("date-picker-dropdown");
+    if(dd)dd.style.display="none";
+  }
+});
+
+function updatePickerLabel(label){
+  const el=document.getElementById("date-picker-label");
+  if(el)el.textContent=label;
+  // Highlight active preset btn
+  document.querySelectorAll(".preset-btn").forEach(b=>b.classList.remove("active"));
+}
+
+function setPreset(preset){
+  const now=new Date(),today=isoDate(now);
+  let from="",to=today,label="";
+  activePreset=preset;
+  if(preset==="today"){
+    from=today;to=today;label="Aujourd'hui";
+  } else if(preset==="week"){
+    const d=new Date(now);const day=now.getDay()||7;d.setDate(now.getDate()-day+1);
+    from=isoDate(d);label="Cette semaine";
+  } else if(preset==="month"){
+    from=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`;
+    label=now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+    label=label.charAt(0).toUpperCase()+label.slice(1);
+  } else if(preset==="lastmonth"){
+    const y=now.getMonth()===0?now.getFullYear()-1:now.getFullYear();
+    const m=now.getMonth()===0?12:now.getMonth();
+    from=`${y}-${String(m).padStart(2,"0")}-01`;
+    to=`${y}-${String(m).padStart(2,"0")}-${String(daysInMonth(y,m)).padStart(2,"0")}`;
+    const d=new Date(y,m-1,1);label="Mois précédent ("+d.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})+")";
+  } else if(preset==="quarter"){
+    const q=Math.floor(now.getMonth()/3);
+    const qStart=new Date(now.getFullYear(),q*3,1);
+    from=isoDate(qStart);
+    label=`T${q+1} ${now.getFullYear()}`;
+  } else if(preset==="year"){
+    from=`${now.getFullYear()}-01-01`;
+    label=`Année ${now.getFullYear()}`;
+  } else if(preset==="lastyear"){
+    const y=now.getFullYear()-1;
+    from=`${y}-01-01`;to=`${y}-12-31`;
+    label=`Année ${y}`;
+  } else if(preset==="all"){
+    from="";to="";label="Toutes les données";
+  }
+  dashFrom=from;dashTo=to;
+  const fi=document.getElementById("dash-from"),ti=document.getElementById("dash-to");
+  if(fi)fi.value=from;if(ti)ti.value=to;
+  updatePickerLabel(label);
+  const btn=document.getElementById("pr-"+preset);
+  if(btn)btn.classList.add("active");
+  document.getElementById("date-picker-dropdown").style.display="none";
+  renderDashboard();
+}
+
+function setDashRange(){
+  dashFrom=document.getElementById("dash-from").value||"";
+  dashTo=document.getElementById("dash-to").value||"";
+  activePreset="custom";
+  // Format label
+  const label=dashFrom&&dashTo?`${fmtDate(dashFrom)} → ${fmtDate(dashTo)}`:dashFrom?`À partir du ${fmtDate(dashFrom)}`:dashTo?`Jusqu'au ${fmtDate(dashTo)}`:"Plage personnalisée";
+  updatePickerLabel(label);
+  document.getElementById("date-picker-dropdown").style.display="none";
+  renderDashboard();
+}
+
+function inRange(date){
+  if(!date)return false;
+  // No range = all data
+  if(!dashFrom&&!dashTo)return true;
+  if(dashFrom&&date<dashFrom)return false;
+  if(dashTo&&date>dashTo)return false;
+  return true;
+}
+
+// Compute prorated charges for the date range.
+// Rule: 1 month always costs the same (mai 31j = fevrier 28j = 1 mois).
+// Annual charge = monthly charge × 1/12 per month.
+// We count how many months overlap the range, weighted by the fraction of that month included.
+function chargesForRange(from,to){
+  const active=charges.filter(ch=>ch.active!==false);
+  if(!active.length)return 0;
+
+  // No range = "all data" = show 1 month equivalent as reference
+  if(!from&&!to){
+    return active.reduce((s,ch)=>{
+      if(ch.period==="annuel")return s+ch.amountHT/12;
+      if(ch.period==="mensuel")return s+ch.amountHT;
+      return s+ch.amountHT; // unitaire: counted as-is
+    },0);
+  }
+
+  const dateFrom=new Date(from||new Date());
+  const dateTo=new Date(to||new Date());
+
+  return active.reduce((s,ch)=>{
+    // Unitaire: not time-prorated, count as a fixed cost for the period
+    if(ch.period==="unitaire") return s+ch.amountHT;
+
+    // Monthly cost of this charge (annual ÷ 12)
+    const monthlyCost=ch.period==="annuel"?ch.amountHT/12:ch.amountHT;
+
+    // Walk through each calendar month overlapping the range
+    // Count fractional months: fraction = overlap_days / days_in_that_month
+    let months=0;
+    const cur=new Date(dateFrom.getFullYear(),dateFrom.getMonth(),1);
+    const endMonth=new Date(dateTo.getFullYear(),dateTo.getMonth(),1);
+    while(cur<=endMonth){
+      const y=cur.getFullYear(),m=cur.getMonth();
+      const dim=daysInMonth(y,m+1); // days in this month
+      const monthStart=new Date(y,m,1);
+      const monthEnd=new Date(y,m,dim);
+      // Clamp to our range
+      const overlapStart=dateFrom>monthStart?dateFrom:monthStart;
+      const overlapEnd=dateTo<monthEnd?dateTo:monthEnd;
+      if(overlapStart<=overlapEnd){
+        const overlapDays=Math.ceil((overlapEnd-overlapStart)/864e5)+1;
+        months+=overlapDays/dim; // fraction of this month
+      }
+      cur.setMonth(cur.getMonth()+1);
+    }
+    return s+monthlyCost*months;
+  },0);
+}
+
+function renderDashboard(){
+  document.getElementById("dash-date").textContent=new Date().toLocaleDateString("fr-FR",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+
+  // Init to "Ce mois" only on very first load
+  if(!dashInitDone){
+    dashInitDone=true;
+    const now=new Date();
+    dashFrom=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`;
+    dashTo=isoDate(now);
+    const lbl=now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+    const el=document.getElementById("date-picker-label");if(el)el.textContent=lbl.charAt(0).toUpperCase()+lbl.slice(1);
+    const btn=document.getElementById("pr-month");if(btn)btn.classList.add("active");
+  }
+  const fi=document.getElementById("dash-from"),ti=document.getElementById("dash-to");
+  if(fi)fi.value=dashFrom||"";
+  if(ti)ti.value=dashTo||"";
+
+  // Filter data by range
+  const paid=shopify.filter(o=>o.status==="paid"&&inRange(o.date));
+  const salesR=sales.filter(s=>inRange(s.date));
+  const allSales=[...salesR,...paid];
+  const totalCA=allSales.reduce((s,v)=>s+v.totalTTC,0);
+  const caShopify=paid.reduce((s,o)=>s+o.totalTTC,0);
+  const caManuel=salesR.reduce((s,v)=>s+v.totalTTC,0);
+  const caTotal=caShopify+caManuel||1;
+  const stockVal=stock.reduce((s,i)=>s+(i.unitCostHT||0)*i.qty,0);
+
+  // Bénéfice produit sur la période
+  let beneficeProduit=0;
+  allSales.forEach(s=>{
+    const unitSaleHT=s.unitHT||(s.totalTTC/1.2/(s.qty||1));
+    const qty=s.qty||1;
+    let cost=0;
+    if(s.linkedStockId){const p=stock.find(x=>x.id===s.linkedStockId);cost=p?.unitCostHT||0;}
+    else{const p=stock.find(x=>(s.product||"").toLowerCase().includes(x.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));cost=p?.unitCostHT||0;}
+    beneficeProduit+=qty*(unitSaleHT-cost);
+  });
+
+  // Charges proratées sur la période
+  const chargesPeriod=chargesForRange(dashFrom,dashTo);
+
+  // Bénéfice net = marge produit − charges proratées
+  const beneficeNet=beneficeProduit-chargesPeriod;
+
+  // Period label
+  const periodLabel=dashFrom&&dashTo?`${fmtDate(dashFrom)} → ${fmtDate(dashTo)}`:dashFrom?`À partir du ${fmtDate(dashFrom)}`:dashTo?`Jusqu'au ${fmtDate(dashTo)}`:"Toutes les données";
+
+  document.getElementById("kpi-row").innerHTML=`
+    <div class="kpi accent"><div class="kpi-orb"></div><div class="kpi-icon">💰</div><div class="kpi-label">CA période</div><div class="kpi-val">${fmtEur(totalCA)}</div><div class="kpi-sub">Shopify + hors site</div></div>
+    <div class="kpi plain"><div class="kpi-icon">📈</div><div class="kpi-label">Ventes période</div><div class="kpi-val">${allSales.length}</div><div class="kpi-sub">${salesR.length} manuelles</div></div>
+    <div class="kpi plain"><div class="kpi-icon">👥</div><div class="kpi-label">Clients uniques</div><div class="kpi-val">${clients.length}</div><div class="kpi-sub">base de données</div></div>
+    <div class="kpi plain"><div class="kpi-icon">📦</div><div class="kpi-label">Stock local HT</div><div class="kpi-val">${fmtEur(stockVal)}</div><div class="kpi-sub">valeur d'achat</div></div>
+    <div class="kpi plain"><div class="kpi-icon">${beneficeNet>=0?"✅":"⚠️"}</div><div class="kpi-label">Bénéfice / Perte net HT</div><div class="kpi-val" style="color:${beneficeNet>=0?"var(--green)":"var(--red)"}">${fmtEur(beneficeNet)}</div><div class="kpi-sub">marge − charges période</div></div>`;
+
+  // Sparkline dynamique — nb de barres selon la durée
+  const days=dashFrom&&dashTo?Math.ceil((new Date(dashTo)-new Date(dashFrom))/864e5)+1:7;
+  const barCount=Math.min(days,14);
+  const barDates=[];
+  if(dashFrom){for(let i=0;i<barCount;i++){const d=new Date(dashFrom);d.setDate(d.getDate()+Math.floor(i*(days/barCount)));barDates.push(isoDate(d));}}
+  else{for(let i=barCount-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);barDates.push(isoDate(d));}}
+  const barVals=barDates.map(ds=>allSales.filter(s=>s.date===ds).reduce((s,v)=>s+v.totalTTC,0));
+  const maxB=Math.max(...barVals,1);
+  document.getElementById("spark-title").textContent=`CA — ${periodLabel}`;
+  document.getElementById("spark-period-label").textContent=fmtEur(barVals.reduce((a,b)=>a+b,0));
+  document.getElementById("spark-bars").innerHTML=barVals.map(v=>`<div class="spark-bar" style="background:${v>0?"var(--orange)":"#e8eaf0"};height:${Math.max(4,(v/maxB)*64)}px"></div>`).join("");
+  document.getElementById("spark-labels").innerHTML=barDates.map(d=>new Date(d).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})).map(l=>`<div class="spark-lbl">${l}</div>`).join("");
+
+  document.getElementById("rep-sh").textContent=fmtEur(caShopify);
+  document.getElementById("rep-mn").textContent=fmtEur(caManuel);
+  document.getElementById("rep-sh-bar").style.width=`${(caShopify/caTotal)*100}%`;
+  document.getElementById("rep-mn-bar").style.width=`${(caManuel/caTotal)*100}%`;
+  document.getElementById("rep-marge").textContent=`${totalCA>0?((beneficeNet/totalCA)*100).toFixed(1):0}%`;
+  document.getElementById("rep-charges").textContent=fmtEur(chargesPeriod);
+  document.getElementById("d-clients").textContent=clients.length;
+  document.getElementById("d-stock").textContent=fmtEur(stockVal);
+  const sorted=[...clients].sort((a,b)=>b.totalPurchases-a.totalPurchases).slice(0,5);
+  document.getElementById("top-clients").innerHTML=sorted.length===0?`<div class="empty-state">Aucun client encore</div>`:sorted.map(c=>`
+    <div class="tc-row"><div style="display:flex;align-items:center;gap:10px"><div class="avatar">${c.name[0].toUpperCase()}</div><div><div style="font-weight:700;font-size:13px">${c.name}</div><div style="font-size:11px;color:var(--muted)">${c.address?.split(",")[1]?.trim()||"—"}</div></div></div><span style="font-weight:800;color:var(--green);font-size:14px">${fmtEur(c.totalPurchases)}</span></div>`).join("");
+}
+
+function calcBenefice(){
+  let total=0;
+  [...sales,...shopify.filter(o=>o.status==="paid")].forEach(s=>{
+    const unitSaleHT=s.unitHT||(s.totalTTC/1.2/(s.qty||1));
+    const qty=s.qty||1;
+    let cost=0;
+    if(s.linkedStockId){const p=stock.find(x=>x.id===s.linkedStockId);cost=p?.unitCostHT||0;}
+    else{const p=stock.find(x=>(s.product||"").toLowerCase().includes(x.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));cost=p?.unitCostHT||0;}
+    total+=qty*(unitSaleHT-cost);
+  });
+  return total;
+}
+
+// ═══════════════════════════ VENTES ══════════════════════════════════════════
+function renderVentes(){
+  let all=[...sales,...shopify];
+  if(sortVentes==="date_desc")all=all.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  else if(sortVentes==="date_asc")all=all.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const arrow=dir=>dir==="date_desc"?"↓":dir==="date_asc"?"↑":"↕";
+  const sortBtn=`<button onclick="toggleSortVentes()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--orange);font-weight:700;padding:0;font-family:'Barlow',sans-serif">${arrow(sortVentes)}</button>`;
+  document.getElementById("ventes-date-th").innerHTML=`Date ${sortBtn}`;
+  document.getElementById("ventes-body").innerHTML=all.length===0?`<tr><td colspan="8" class="empty-state">Aucune vente enregistrée</td></tr>`:all.map(s=>`<tr>
+    <td style="font-weight:700;color:var(--orange);font-family:monospace;font-size:12px">${s.invoiceNum||"—"}</td>
+    <td style="font-weight:600">${s.client}</td>
+    <td style="color:var(--muted)">${s.product}</td>
+    <td>${s.qty||1}</td>
+    <td style="font-weight:700;color:var(--green)">${fmtEur(s.totalTTC)}</td>
+    <td style="color:var(--muted)">${fmtDate(s.date)}</td>
+    <td>${badge(s.source==="shopify"?"Shopify":"Manuel",s.source==="shopify"?"bg":"bo")}</td>
+    <td>${s.source==="manual"?`<button class="btn btn-sm btn-ghost" onclick="dlInvoice(${s.id})">🧾 Télécharger</button>`:`<span style="font-size:11px;color:var(--light)">Auto</span>`}</td>
+  </tr>`).join("");
+}
+function toggleSortVentes(){sortVentes=sortVentes==="date_desc"?"date_asc":"date_desc";renderVentes();}
+
+// ═══════════════════════════ ACHATS ══════════════════════════════════════════
+function renderAchats(){
+  const totalHT=purchases.reduce((s,p)=>s+p.amountHT,0);
+  document.getElementById("achats-sub").textContent=`${purchases.length} achat${purchases.length>1?"s":""} · Total HT : ${fmtEur(totalHT)}`;
+  let sorted=[...purchases];
+  if(sortAchats==="date_desc")sorted=sorted.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  else if(sortAchats==="date_asc")sorted=sorted.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const arrow=dir=>dir==="date_desc"?"↓":dir==="date_asc"?"↑":"↕";
+  const sortBtn=`<button onclick="toggleSortAchats()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--orange);font-weight:700;padding:0;font-family:'Barlow',sans-serif">${arrow(sortAchats)}</button>`;
+  document.getElementById("achats-date-th").innerHTML=`Date ${sortBtn}`;
+  document.getElementById("achats-body").innerHTML=sorted.length===0?`<tr><td colspan="10" class="empty-state">Aucun achat enregistré</td></tr>`:sorted.map(p=>{
+    const cfg=STATUS[p.stockStatus]||STATUS.preparation;
+    const linkedProd=p.linkedStockId?stock.find(s=>s.id===p.linkedStockId):null;
+    return `<tr>
+      <td style="font-weight:700">${p.supplierId?`<span style="cursor:pointer;color:var(--navy)" onclick="openSupplierDetail(${p.supplierId})">${p.supplier} <span style="color:var(--orange);font-size:11px">↗</span></span>`:p.supplier}</td>
+      <td style="color:var(--muted)">${p.description}</td>
+      <td>${p._lines&&p._lines.length>1
+        ? p._lines.map(l=>l.linkedStockId?badge(l.qty+"x "+l.product,"bg"):`<span style='font-size:11px;color:var(--muted)'>${l.qty}x ${l.product}</span>`).join(" ")
+        : linkedProd?badge(linkedProd.name,"bg"):`<span style="font-size:11px;color:var(--light)">—</span>`
+      }</td>
+      <td style="font-weight:600">${p.qty||"—"}</td>
+      <td style="color:var(--muted)">${p._lines&&p._lines.length>1?p._lines.map(l=>fmtEur(l.unitHT)).join(" / "):fmtEur(p.unitHT||0)}</td>
+      <td style="font-weight:700;color:var(--red)">-${fmtEur(p.amountHT)}</td>
+      <td style="color:var(--muted)">${fmtDate(p.date)}</td>
+      <td>
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:130px">
+          <button onclick="changeStatus(${p.id},'preparation')" style="text-align:left;padding:4px 9px;border-radius:6px;font-size:10px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;border:1.5px solid;transition:all 0.13s;background:${p.stockStatus==='preparation'?'var(--yellow-pale)':'#f7f8fc'};color:${p.stockStatus==='preparation'?'var(--yellow)':'var(--light)'};border-color:${p.stockStatus==='preparation'?'#fde68a':'var(--border)'}">⏳ En préparation</button>
+          <button onclick="changeStatus(${p.id},'livraison')" style="text-align:left;padding:4px 9px;border-radius:6px;font-size:10px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;border:1.5px solid;transition:all 0.13s;background:${p.stockStatus==='livraison'?'var(--blue-pale)':'#f7f8fc'};color:${p.stockStatus==='livraison'?'var(--blue)':'var(--light)'};border-color:${p.stockStatus==='livraison'?'#bfdbfe':'var(--border)'}">🚚 En livraison</button>
+          <button onclick="changeStatus(${p.id},'local')" style="text-align:left;padding:4px 9px;border-radius:6px;font-size:10px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;border:1.5px solid;transition:all 0.13s;background:${p.stockStatus==='local'?'var(--green-pale)':'#f7f8fc'};color:${p.stockStatus==='local'?'var(--green)':'var(--light)'};border-color:${p.stockStatus==='local'?'#bbf7d0':'var(--border)'}">📦 Au local</button>
+        </div>
+      </td>
+      <td>${p.hasInvoice?badge("📎 "+p.invoiceFile,"bg"):badge("Manquante","br")}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="deletePurchase(${p.id})">✕</button></td>
+    </tr>`;
+  }).join("");
+}
+
+function toggleSortAchats(){sortAchats=sortAchats==="date_desc"?"date_asc":"date_desc";renderAchats();}
+function changeStatus(id,newStatus){
+  const prev=purchases.find(p=>p.id===id);if(!prev)return;
+  if(prev.stockStatus===newStatus)return; // no change
+  const wasLocal=prev.stockStatus==="local",becomesLocal=newStatus==="local";
+  if(!wasLocal&&becomesLocal)addStockFromPurchase(prev);
+  else if(wasLocal&&!becomesLocal)removeStockFromPurchase(prev);
+  purchases=purchases.map(p=>p.id===id?{...p,stockStatus:newStatus}:p);
+  renderAchats();
+  notify(`✅ ${STATUS[newStatus]?.icon} ${STATUS[newStatus]?.label}`);
+  const updatedP=purchases.find(p=>p.id===id);
+  if(updatedP) savePurchase(updatedP);
+  // update stock in DB
+  const lns=updatedP?._lines||[];
+  lns.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)saveStock(s);}});
+}
+function addStockFromPurchase(p){
+  const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,qty:p.qty}];
+  lines.forEach(l=>{
+    if(!l.linkedStockId)return;
+    let found=false;
+    stock=stock.map(s=>{
+      if(s.id===l.linkedStockId){found=true;return {...s,qty:s.qty+l.qty,lastUpdate:p.date};}
+      return s;
+    });
+    if(!found) console.warn("addStock: linkedStockId not found",l.linkedStockId,"in",stock.map(s=>s.id));
+  });
+  renderStock();
+}
+function removeStockFromPurchase(p){
+  if(p.stockStatus!=="local")return;
+  const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,qty:p.qty}];
+  lines.forEach(l=>{
+    if(!l.linkedStockId)return;
+    stock=stock.map(s=>s.id===l.linkedStockId?{...s,qty:Math.max(0,s.qty-l.qty),lastUpdate:new Date().toISOString().split("T")[0]}:s);
+  });
+}
+function deletePurchase(id){
+  if(!confirm("Supprimer cet achat ?"))return;
+  const p=purchases.find(x=>x.id===id);
+  if(p)removeStockFromPurchase(p);
+  purchases=purchases.filter(x=>x.id!==id);
+  renderAchats();notify("🗑 Achat supprimé");
+  dbDelete("purchases",id);
+}
+
+// ═══════════════════════════ CLIENTS ═════════════════════════════════════════
+function renderClients(search){
+  const filtered=clients.filter(c=>c.name.toLowerCase().includes((search||"").toLowerCase())||(c.siret||"").includes(search||""));
+  document.getElementById("clients-sub").textContent=`${clients.length} client${clients.length>1?"s":""} enregistré${clients.length>1?"s":""}`;
+  document.getElementById("clients-body").innerHTML=filtered.length===0?`<tr><td colspan="8" class="empty-state">Aucun client</td></tr>`:filtered.map(c=>`<tr>
+    <td><div style="display:flex;align-items:center;gap:10px"><div class="avatar">${c.name[0].toUpperCase()}</div><span style="font-weight:700">${c.name}</span></div></td>
+    <td style="color:var(--muted);font-size:12px">${c.address||"—"}</td>
+    <td style="font-family:monospace;font-size:12px;color:var(--muted)">${c.siret||"—"}</td>
+    <td style="font-size:12px;color:var(--muted)">${c.tvaIntra||"—"}</td>
+    <td style="color:var(--muted);font-size:12px">${c.email||"—"}</td>
+    <td style="color:var(--muted);font-size:12px">${c.phone||"—"}</td>
+    <td style="font-weight:700;color:var(--green)">${fmtEur(c.totalPurchases)}</td>
+    <td><div style="display:flex;gap:5px"><button class="btn btn-sm btn-secondary" onclick="openEditClient(${c.id})">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteClient(${c.id})">✕</button></div></td>
+  </tr>`).join("");
+}
+function deleteClient(id){if(!confirm("Supprimer ce client ?"))return;clients=clients.filter(c=>c.id!==id);dbDelete("clients",id);renderClients("");}
+function openEditClient(id){
+  const c=clients.find(x=>x.id===id);if(!c)return;
+  _openClientModal(c);
+}
+
+// ═══════════════════════════ STOCK ═══════════════════════════════════════════
+function renderStock(){
+  const total=stock.reduce((s,i)=>s+(i.unitCostHT||0)*i.qty,0);
+  document.getElementById("stock-sub").textContent=`Valeur totale : ${fmtEur(total)} HT`;
+  document.getElementById("stock-body").innerHTML=stock.length===0?`<tr><td colspan="8" class="empty-state">Aucun produit</td></tr>`:stock.map(s=>`<tr>
+    <td style="font-weight:600">${s.name}</td>
+    <td><span style="font-weight:800;font-size:15px;color:${stockColor(s.qty)}">${s.qty}</span> <span style="color:var(--light);font-size:11px">u.</span></td>
+    <td style="color:var(--muted)">${s.reserved}</td>
+    <td style="color:var(--muted)">${fmtEur(s.unitCostHT||0)}</td>
+    <td style="font-weight:700">${fmtEur((s.unitCostHT||0)*s.qty)}</td>
+    <td>${badge(s.shopifyLinked?"Lié":"Manuel",s.shopifyLinked?"bg":"bx")}</td>
+    <td style="color:var(--muted);font-size:12px">${fmtDate(s.lastUpdate)}</td>
+    <td><button class="btn btn-sm btn-secondary" onclick="openAddStock(${s.id})">Modifier</button></td>
+  </tr>`).join("");
+}
+
+// ═══════════════════════════ CHARGES ═════════════════════════════════════════
+function renderCharges(){
+  const active=charges.filter(ch=>ch.active!==false);
+  const toMonthly=ch=>ch.period==="annuel"?ch.amountHT/12:ch.amountHT;
+  const totalMonthly=active.reduce((s,ch)=>s+toMonthly(ch),0);
+  const fixedMonthly=active.filter(ch=>ch.type==="fixe").reduce((s,ch)=>s+toMonthly(ch),0);
+  const varMonthly=active.filter(ch=>ch.type==="variable").reduce((s,ch)=>s+toMonthly(ch),0);
+  document.getElementById("charges-sub").textContent=`${charges.length} charge${charges.length>1?"s":""} · ${active.length} active${active.length>1?"s":""}`;
+  document.getElementById("charges-kpis").innerHTML=`
+    <div class="kpi accent"><div class="kpi-orb"></div><div class="kpi-icon">💸</div><div class="kpi-label">Total / mois HT</div><div class="kpi-val">${fmtEur(totalMonthly)}</div><div class="kpi-sub">charges actives</div></div>
+    <div class="kpi plain"><div class="kpi-icon">🔒</div><div class="kpi-label">Fixes / mois HT</div><div class="kpi-val">${fmtEur(fixedMonthly)}</div><div class="kpi-sub">${active.filter(ch=>ch.type==="fixe").length} charges</div></div>
+    <div class="kpi plain"><div class="kpi-icon">📦</div><div class="kpi-label">Variables / mois HT</div><div class="kpi-val">${fmtEur(varMonthly)}</div><div class="kpi-sub">${active.filter(ch=>ch.type==="variable").length} charges</div></div>`;
+  document.getElementById("charges-body").innerHTML=charges.length===0?`<tr><td colspan="9" class="empty-state">Aucune charge enregistrée</td></tr>`:charges.map(ch=>`<tr style="${ch.active===false?"opacity:0.45":""}">
+    <td style="font-weight:700">${ch.name}</td>
+    <td>${badge(ch.type==="fixe"?"🔒 Fixe":"📦 Variable",ch.type==="fixe"?"bb":"by")}</td>
+    <td style="color:var(--muted)">${{mensuel:"Mensuel",annuel:"Annuel",unitaire:"Unitaire"}[ch.period]||ch.period}</td>
+    <td style="font-weight:700;color:var(--red)">-${fmtEur(ch.amountHT)}</td>
+    <td style="color:var(--muted)">-${fmtEur(toMonthly(ch))}</td>
+    <td style="color:var(--muted);font-size:12px">${ch.category||"—"}</td>
+    <td style="color:var(--muted);font-size:12px;font-style:italic">${ch.note||""}</td>
+    <td><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;color:${ch.active!==false?"var(--green)":"var(--light)"}"><input type="checkbox" ${ch.active!==false?"checked":""} onchange="toggleCharge(${ch.id},this.checked)" style="accent-color:var(--green);width:14px;height:14px"/>${ch.active!==false?"Actif":"Inactif"}</label></td>
+    <td><div style="display:flex;gap:5px"><button class="btn btn-sm btn-secondary" onclick="openAddCharge(${ch.id})">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteCharge(${ch.id})">✕</button></div></td>
+  </tr>`).join("");
+}
+function toggleCharge(id,active){charges=charges.map(ch=>ch.id===id?{...ch,active}:ch);renderCharges();}
+function deleteCharge(id){if(!confirm("Supprimer ?"))return;charges=charges.filter(ch=>ch.id!==id);renderCharges();}
+
+// ═══════════════════════════ FACTURES ════════════════════════════════════════
+function renderFactures(){
+  resequenceInvoices();
+  const all=[...sales.map(s=>({...s,type:"manual"})),...shopify.map(s=>({...s,type:"shopify"}))].sort((a,b)=>(a.globalSeq||0)-(b.globalSeq||0));
+  const total=all.filter(i=>i.status!=="refunded").reduce((s,v)=>s+v.totalTTC,0);
+  document.getElementById("fac-sub").textContent=`${all.length} facture${all.length>1?"s":""} · Total TTC : ${fmtEur(total)}`;
+  document.getElementById("inv-body").innerHTML=all.length===0?`<tr><td colspan="7" class="empty-state">Aucune facture</td></tr>`:all.map(inv=>`<tr>
+    <td style="font-weight:700;color:var(--orange);font-family:monospace;font-size:13px">${inv.invoiceNum}</td>
+    <td style="font-weight:600">${inv.client}</td>
+    <td style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inv.product}</td>
+    <td style="font-weight:700;color:var(--green)">${fmtEur(inv.totalTTC)}</td>
+    <td style="color:var(--muted)">${fmtDate(inv.date)}</td>
+    <td>${badge(inv.type==="shopify"?"Shopify":"Manuel",inv.type==="shopify"?"bg":"bo")}</td>
+    <td><div style="display:flex;gap:6px">
+      ${inv.type==="manual"?`<button class="btn btn-sm btn-ghost" onclick="dlInvoice(${inv.id})" title="Télécharger">↓</button>`:""}
+      ${inv.type==="manual"?`<button class="btn btn-sm btn-secondary" onclick="sendInvoiceByMail(${inv.id})" title="Envoyer par mail">✉</button>`:""}
+      ${inv.type==="manual"?`<button class="btn btn-sm btn-danger" onclick="deleteInvoice(${inv.id})" title="Supprimer">✕</button>`:`<span style="font-size:11px;color:var(--light)">Shopify</span>`}
+    </div></td>
+  </tr>`).join("");
+}
+function deleteInvoice(id){
+  if(!confirm("Supprimer cette facture ? Les numéros seront recalculés."))return;
+  const s=sales.find(x=>x.id===id);
+  if(s){
+    if(s.linkedStockId)stock=stock.map(st=>st.id===s.linkedStockId?{...st,qty:st.qty+(s.qty||0)}:st);
+    else{const m=stock.find(st=>s.product.toLowerCase().includes(st.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m)stock=stock.map(st=>st.id===m.id?{...st,qty:st.qty+(s.qty||0)}:st);}
+    if(s.clientId)clients=clients.map(c=>c.id===s.clientId?{...c,totalPurchases:Math.max(0,(c.totalPurchases||0)-s.totalTTC)}:c);
+  }
+  sales=sales.filter(x=>x.id!==id);
+  renderFactures();notify("🗑 Facture supprimée · stock et CA ajustés");
+  dbDelete("sales",id);
+}
+
+// ═══════════════════════════ INVOICE BUILDER ══════════════════════════════════
+
+function buildInvoiceHTML(invoiceNum,clientObj,lines,date,shipping){
+  const ci=companyInfo;
+  const totalHT=lines.reduce((s,l)=>s+l.totalHT,0)+(shipping||0);
+  const tva20=totalHT*0.2,ttc=totalHT*1.2;
+  const clientName=clientObj?.name||"";
+  const clientAddr=[clientObj?.address,clientObj?.zipCity].filter(Boolean).join(", ");
+  const linesHTML=lines.map(l=>`<tr><td style="padding:13px 16px;font-weight:600;color:#0F1535">${l.product}</td><td style="padding:13px 16px;text-align:center">${l.qty}</td><td style="padding:13px 16px;text-align:right">${fmtEur(l.unitHT)}</td><td style="padding:13px 16px;text-align:right">${fmtEur(l.totalHT)}</td></tr>`).join("")+(shipping>0?`<tr><td style="padding:13px 16px;color:#7a7f96">Frais de port</td><td style="padding:13px 16px;text-align:center">1</td><td style="padding:13px 16px;text-align:right">${fmtEur(shipping)}</td><td style="padding:13px 16px;text-align:right">${fmtEur(shipping)}</td></tr>`:"");
+  const echeance=(()=>{const d=new Date(date);d.setDate(d.getDate()+parseInt(ci.paymentTerms||30));return fmtDate(d.toISOString().split("T")[0]);})();
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><title>Facture ${invoiceNum}</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;900&display=swap" rel="stylesheet"/>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Barlow',Arial,sans-serif;color:#0F1535;background:#fff;font-size:13px}
+.page{max-width:820px;margin:0 auto;padding:48px 52px}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px;padding-bottom:24px;border-bottom:2px solid #0F1535}
+.brand{font-size:30px;font-weight:900}.brand span{color:#F47920}
+.brand-legal{font-size:11px;color:#7a7f96;margin-top:4px;line-height:1.7}
+.ibadge{display:inline-block;background:#F47920;color:#fff;padding:5px 14px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:2px;margin-bottom:7px}
+.inum{font-size:22px;font-weight:800}.idate{font-size:12px;color:#7a7f96;margin-top:2px}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:30px}
+.pbox{background:#f8f9fc;border-radius:8px;padding:16px 18px}
+.pbox2{background:#f0f4ff}
+.plabel{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#b0b4c8;margin-bottom:8px}
+.pname{font-size:15px;font-weight:800;margin-bottom:5px}
+.pdetail{font-size:12px;color:#6b7280;line-height:1.7}
+.tbl-wrap{border-radius:8px;overflow:hidden;border:1px solid #e8eaf0;margin-bottom:24px}
+table{width:100%;border-collapse:collapse}
+thead{background:#0F1535}
+thead th{padding:10px 16px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.7);text-align:left}
+thead th:not(:first-child){text-align:right}
+tbody tr{border-bottom:1px solid #f0f2f8}tbody tr:last-child{border-bottom:none}tbody tr:nth-child(even){background:#fafbfd}
+.totals{display:flex;justify-content:flex-end;margin-bottom:24px}
+.ti{width:280px;border:1px solid #e8eaf0;border-radius:8px;overflow:hidden}
+.tr{display:flex;justify-content:space-between;padding:9px 14px;font-size:13px;color:#6b7280;border-bottom:1px solid #f0f2f8}
+.tr span:last-child{font-weight:600;color:#0F1535}
+.tf{display:flex;justify-content:space-between;padding:13px 14px;background:#0F1535}
+.tf span:first-child{font-size:13px;font-weight:700;color:rgba(255,255,255,0.8)}
+.tf span:last-child{font-size:18px;font-weight:900;color:#F47920}
+.payment{background:#fffbf5;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;margin-bottom:22px}
+.pt{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#d97706;margin-bottom:8px}
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pr{font-size:12px;color:#6b7280}
+.legal{border-top:1px solid #e8eaf0;padding-top:14px;font-size:10px;color:#9ca3af;line-height:1.8}
+.legal b{color:#6b7280}
+</style></head><body><div class="page" id="invoice-content">
+<div class="hdr">
+  <div><div class="brand">${ci.name.replace("BLC","BL<span>C</span>")}</div><div class="brand-legal">${ci.legalForm}${ci.capital?" · Capital : "+ci.capital+" €":""}${ci.rcs?" · RCS "+ci.rcs:""}<br/>${ci.address?ci.address+"<br/>":""}${ci.zipCity||""}${ci.email?"<br/>"+ci.email:""}${ci.phone?" · "+ci.phone:""}${ci.website?"<br/>"+ci.website:""}</div></div>
+  <div style="text-align:right"><div class="ibadge">FACTURE</div><div class="inum">${invoiceNum}</div><div class="idate">Émise le ${fmtDate(date)}</div><div class="idate">Échéance : ${echeance}</div></div>
+</div>
+<div class="parties">
+  <div class="pbox"><div class="plabel">Émetteur</div><div class="pname">${ci.name}</div><div class="pdetail">${ci.siret?"<b>SIRET :</b> "+ci.siret+"<br/>":""}${ci.tvaIntra?"<b>TVA :</b> "+ci.tvaIntra+"<br/>":""}${ci.address?ci.address+"<br/>":""}${ci.zipCity||""}</div></div>
+  <div class="pbox pbox2"><div class="plabel">Facturé à</div><div class="pname">${clientName}</div><div class="pdetail">${clientObj?.siret?"<b>SIRET :</b> "+clientObj.siret+"<br/>":""}${clientObj?.tvaIntra?"<b>TVA :</b> "+clientObj.tvaIntra+"<br/>":""}${clientAddr?"<br/>"+clientAddr:""}${clientObj?.email?"<br/>"+clientObj.email:""}${clientObj?.phone?"<br/>"+clientObj.phone:""}</div></div>
+</div>
+<div class="tbl-wrap"><table><thead><tr><th style="width:45%">Désignation</th><th style="width:15%">Quantité</th><th style="width:20%">Prix unit. HT</th><th style="width:20%">Total HT</th></tr></thead><tbody>${linesHTML}</tbody></table></div>
+<div class="totals"><div class="ti">
+  <div class="tr"><span>Sous-total HT</span><span>${fmtEur(totalHT-(shipping||0))}</span></div>
+  ${shipping>0?`<div class="tr"><span>Port HT</span><span>${fmtEur(shipping)}</span></div>`:""}
+  <div class="tr"><span>TVA 20%</span><span>${fmtEur(tva20)}</span></div>
+  <div class="tf"><span>Total TTC</span><span>${fmtEur(ttc)}</span></div>
+</div></div>
+${(ci.iban||ci.paymentTerms)?`<div class="payment"><div class="pt">Informations de paiement</div><div class="pg">${ci.paymentTerms?`<div class="pr"><b>Délai :</b> ${ci.paymentTerms} jours</div>`:""}${ci.iban?`<div class="pr"><b>IBAN :</b> ${ci.iban}</div>`:""}${ci.bic?`<div class="pr"><b>BIC :</b> ${ci.bic}</div>`:""}${ci.bank?`<div class="pr"><b>Banque :</b> ${ci.bank}</div>`:""}</div></div>`:""}
+<div class="legal"><b>Mentions légales :</b> En cas de retard, pénalités au taux de <b>${ci.lateInterest}</b> (art. L441-10 C. com.) + indemnité forfaitaire <b>${ci.recoveryFee} €</b> (D.441-5 C. com.). Escompte pour paiement anticipé : néant.${ci.siret?"<br/><b>SIRET :</b> "+ci.siret+(ci.tvaIntra?" · <b>TVA :</b> "+ci.tvaIntra:""):""}${ci.rcs?"<br/><b>RCS :</b> "+ci.rcs:""}${ci.legalForm&&ci.capital?"<br/>"+ci.name+" — "+ci.legalForm+" au capital de "+ci.capital+" €":""}</div>
+</div></body></html>`;
+}
+
+// Generate PDF from invoice HTML using jsPDF + html2canvas
+async function generatePDF(invoiceNum, clientObj, lines, date, shipping) {
+  // Create hidden iframe to render the invoice
+  const html = buildInvoiceHTML(invoiceNum, clientObj, lines, date, shipping);
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:900px;height:1200px;border:none;";
+  document.body.appendChild(iframe);
+  
+  return new Promise((resolve) => {
+    iframe.onload = async () => {
+      try {
+        await new Promise(r => setTimeout(r, 800)); // wait for fonts
+        const canvas = await html2canvas(iframe.contentDocument.getElementById("invoice-content"), {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          width: 820,
+        });
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+        const imgData = canvas.toDataURL("image/png");
+        const pdfW = pdf.internal.pageSize.getWidth();
+        const pdfH = (canvas.height * pdfW) / canvas.width;
+        pdf.addImage(imgData, "PNG", 0, 0, pdfW, Math.min(pdfH, pdf.internal.pageSize.getHeight()));
+        document.body.removeChild(iframe);
+        resolve(pdf);
+      } catch(e) {
+        document.body.removeChild(iframe);
+        console.error("PDF error:", e);
+        resolve(null);
+      }
+    };
+    iframe.srcdoc = html;
+  });
+}
+
+async function dlInvoice(id) {
+  const s = sales.find(x => x.id === id); if(!s) return;
+  const clientObj = clients.find(c => c.id === s.clientId) || {name: s.client};
+  const ht = s.totalTTC / 1.2;
+  const lines = s._lines || [{product: s.product, qty: s.qty||1, unitHT: s.unitHT||(ht/(s.qty||1)), totalHT: ht-(s.shipping||0)}];
+  notify("⏳ Génération du PDF…");
+  const pdf = await generatePDF(s.invoiceNum, clientObj, lines, s.date, s.shipping||0);
+  if(pdf) {
+    pdf.save(`${s.invoiceNum}-${s.client.replace(/\s/g,"_")}.pdf`);
+    notify(`🧾 Facture ${s.invoiceNum} téléchargée en PDF`);
+  } else {
+    // Fallback HTML si pdf échoue
+    const html = buildInvoiceHTML(s.invoiceNum, clientObj, lines, s.date, s.shipping||0);
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([html],{type:"text/html"})); a.download = `${s.invoiceNum}-${s.client.replace(/\s/g,"_")}.html`; a.click();
+    notify(`🧾 Facture ${s.invoiceNum} téléchargée (HTML)`);
+  }
+}
+
+function sendInvoiceByMail(id){
+  const s=sales.find(x=>x.id===id);if(!s)return;
+  const clientObj=clients.find(c=>c.id===s.clientId);
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">✉ Envoyer la facture</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="sub-box" style="font-size:13px"><b style="color:var(--orange)">${s.invoiceNum}</b> · ${s.client} · <b>${fmtEur(s.totalTTC)}</b></div>
+    <div class="field"><label>Email du client</label><input class="input" id="mail-to" value="${clientObj?.email||""}" placeholder="client@exemple.fr"/></div>
+    <div class="field"><label>Message (optionnel)</label><textarea class="input" id="mail-msg" rows="3" style="resize:vertical" placeholder="Bonjour, veuillez trouver ci-joint votre facture…"></textarea></div>
+    <div style="background:var(--yellow-pale);border-radius:9px;padding:10px 12px;margin-bottom:13px;font-size:12px;color:var(--yellow)">ℹ Le PDF sera téléchargé. Votre client mail s'ouvrira avec les infos pré-remplies — joignez le PDF manuellement.</div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitSendMail(${id})">Préparer l'envoi</button>
+  </div></div>`);
+}
+async function submitSendMail(id){
+  const to=document.getElementById("mail-to").value.trim();
+  const msg=document.getElementById("mail-msg").value.trim();
+  if(!to){notify("⚠ Entrez une adresse email");return;}
+  const s=sales.find(x=>x.id===id);if(!s)return;
+  closeModal();
+  await dlInvoice(id); // télécharge le PDF d'abord
+  const subj=encodeURIComponent(`Facture ${s.invoiceNum} — ${companyInfo.name}`);
+  const body=encodeURIComponent((msg||`Bonjour,\n\nVeuillez trouver en pièce jointe votre facture ${s.invoiceNum} d'un montant de ${fmtEur(s.totalTTC)}.\n\nCordialement,\n${companyInfo.name}`));
+  setTimeout(()=>{window.location.href=`mailto:${to}?subject=${subj}&body=${body}`;},1200);
+  notify(`✉ PDF téléchargé · Mail préparé pour ${to}`);
+}
+
+// ═══════════════════════════ MODALS — VENTE ═══════════════════════════════════
+// ═══════════════════════════ MODALS — VENTE (multiproduits) ══════════════════
+function getStockOpts(){return stock.map(s=>`<option value="${s.id}" data-cost="${s.unitCostHT||0}" data-qty="${s.qty}" data-name="${s.name}">${s.name} (${s.qty} u.)</option>`).join("");}
+
+function openAddSale(){
+  const clientOpts=clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
+    <div class="modal-hdr"><div class="modal-title">Nouvelle vente</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Client</label>
+      <select class="input" id="f-cid" onchange="onSaleClientChange(this)">
+        <option value="">— Sélectionner ou créer —</option>${clientOpts}
+        <option value="__new__">+ Nouveau client…</option>
+      </select>
+    </div>
+    <div id="f-new-client-wrap" style="display:none">
+      <div class="sub-box"><div class="sub-box-title">Nouveau client</div>
+        <div class="field"><label>Nom / Entreprise *</label><input class="input" id="f-cname" placeholder="Ex: Boutique Élise"/></div>
+        <div class="field"><label>Adresse</label><input class="input" id="f-caddr" placeholder="12 rue de la Paix, 75001 Paris"/></div>
+        <div class="row2">
+          <div class="field"><label>SIRET</label><input class="input" id="f-csiret" placeholder="48291038200014"/></div>
+          <div class="field"><label>N° TVA intra</label><input class="input" id="f-ctva" placeholder="FR00123456789"/></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Email</label><input class="input" type="email" id="f-cemail" placeholder="contact@client.fr"/></div>
+          <div class="field"><label>Téléphone</label><input class="input" id="f-cphone" placeholder="01 23 45 67 89"/></div>
+        </div>
+      </div>
+    </div>
+    <hr class="div"/>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:10px">Produits vendus</div>
+    <div id="sale-lines-wrap"></div>
+    <button class="btn btn-secondary" style="width:100%;margin-bottom:12px" onclick="saleAddLine()">+ Ajouter un produit</button>
+    <hr class="div"/>
+    <div class="row2">
+      <div class="field"><label>Livraison HT (€)</label><input class="input" type="number" id="f-ship" value="0" step="0.01" oninput="calcSaleTotal()"/></div>
+      <div class="field"><label>Date</label><input class="input" type="date" id="f-date" value="${new Date().toISOString().split("T")[0]}"/></div>
+    </div>
+    <div id="sale-total-prev" style="display:none;background:var(--orange-pale);border-radius:9px;padding:11px 13px;margin-bottom:13px;font-size:13px;color:#c45e0a"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitSale()">Enregistrer la vente</button>
+  </div></div>`);
+  window._saleLines=[];
+  saleAddLine();
+}
+
+function onSaleClientChange(sel){document.getElementById("f-new-client-wrap").style.display=sel.value==="__new__"?"block":"none";}
+
+function saleAddLine(){
+  const id=++_lineCounter;
+  window._saleLines=[...(window._saleLines||[]),id];
+  const wrap=document.getElementById("sale-lines-wrap");
+  const div=document.createElement("div");
+  div.id=`sl-${id}`;
+  div.style.cssText="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:10px;align-items:end;background:#f7f8fc;padding:12px;border-radius:10px";
+  div.innerHTML=`
+    <div class="field" style="margin:0">
+      <label>Produit</label>
+      <select class="input" id="sl-p-${id}" onchange="onSaleLineChange(${id},this)">
+        <option value="">— Choisir —</option>${getStockOpts()}<option value="__libre__">Texte libre…</option>
+      </select>
+      <input class="input" id="sl-t-${id}" style="display:none;margin-top:6px" placeholder="Description…"/>
+      <div id="sl-info-${id}" style="display:none;margin-top:4px;font-size:11px;color:var(--green)"></div>
+    </div>
+    <div class="field" style="margin:0"><label>Qté</label><input class="input" type="number" id="sl-q-${id}" value="1" min="1" step="1" oninput="calcSaleTotal()"/></div>
+    <div class="field" style="margin:0"><label>Prix u. HT (€)</label><input class="input" type="number" id="sl-u-${id}" step="0.01" placeholder="0.00" oninput="calcSaleTotal()"/></div>
+    <button class="btn btn-sm btn-danger" style="height:38px;margin-bottom:1px" onclick="saleRemoveLine(${id})">✕</button>`;
+  wrap.appendChild(div);
+}
+
+function onSaleLineChange(id,sel){
+  const txt=document.getElementById(`sl-t-${id}`);
+  const info=document.getElementById(`sl-info-${id}`);
+  txt.style.display=sel.value==="__libre__"?"block":"none";
+  if(sel.value&&sel.value!=="__libre__"){
+    const opt=sel.options[sel.selectedIndex];
+    const cost=parseFloat(opt.getAttribute("data-cost")||0);
+    const qty=parseInt(opt.getAttribute("data-qty")||0);
+    document.getElementById(`sl-u-${id}`).value=cost||"";
+    info.style.display="block";
+    info.innerHTML=`📦 ${qty} u. en stock · coût : ${fmtEur(cost)}`;
+    calcSaleTotal();
+  } else info.style.display="none";
+}
+
+function saleRemoveLine(id){
+  const el=document.getElementById(`sl-${id}`);if(el)el.remove();
+  window._saleLines=(window._saleLines||[]).filter(x=>x!==id);
+  calcSaleTotal();
+}
+
+function calcSaleTotal(){
+  let ht=0;
+  (window._saleLines||[]).forEach(id=>{
+    ht+=(parseFloat(document.getElementById(`sl-q-${id}`)?.value||0))*(parseFloat(document.getElementById(`sl-u-${id}`)?.value||0));
+  });
+  const ship=parseFloat(document.getElementById("f-ship")?.value||0);
+  const prev=document.getElementById("sale-total-prev");if(!prev)return;
+  if(ht>0){prev.style.display="block";prev.innerHTML=`<b>Total TTC estimé :</b> ${fmtEur((ht+ship)*1.2)}`;}
+  else prev.style.display="none";
+}
+
+function submitSale(){
+  const cid=document.getElementById("f-cid").value;
+  let clientObj=cid&&cid!=="__new__"?clients.find(c=>c.id===parseInt(cid)):null;
+  let clientName="";
+  if(cid==="__new__"){
+    clientName=document.getElementById("f-cname").value.trim();
+    if(!clientName){notify("⚠ Entrez le nom du client");return;}
+    clientObj={id:Date.now(),name:clientName,address:document.getElementById("f-caddr")?.value.trim()||"",siret:document.getElementById("f-csiret")?.value.trim()||"",tvaIntra:document.getElementById("f-ctva")?.value.trim()||"",email:document.getElementById("f-cemail")?.value.trim()||"",phone:document.getElementById("f-cphone")?.value.trim()||"",totalPurchases:0};
+    clients=[...clients,clientObj];
+  }else clientName=clientObj?.name||"";
+  if(!clientName){notify("⚠ Sélectionnez un client");return;}
+
+  // Build lines
+  const lines=[];
+  for(const id of(window._saleLines||[])){
+    const prodSel=document.getElementById(`sl-p-${id}`);
+    const qty=parseInt(document.getElementById(`sl-q-${id}`)?.value||0);
+    const uht=parseFloat(document.getElementById(`sl-u-${id}`)?.value||0);
+    if(!qty||!uht)continue;
+    let prodName="",linkedStockId=null;
+    if(prodSel.value==="__libre__") prodName=document.getElementById(`sl-t-${id}`)?.value||"Produit";
+    else if(prodSel.value){
+      prodName=prodSel.options[prodSel.selectedIndex]?.getAttribute("data-name")||"Produit";
+      linkedStockId=parseInt(prodSel.value);
+      // Stock check
+      const s=stock.find(x=>x.id===linkedStockId);
+      if(s&&s.qty<qty&&!confirm(`⚠ Stock insuffisant pour "${prodName}" : ${s.qty} u. dispo, ${qty} vendues. Continuer ?`))return;
+    }
+    lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId});
+  }
+  if(!lines.length){notify("⚠ Ajoutez au moins un produit");return;}
+
+  const ship=parseFloat(document.getElementById("f-ship")?.value||0);
+  const date=document.getElementById("f-date").value;
+  const totalHT=lines.reduce((s,l)=>s+l.totalHT,0)+ship;
+  const ttc=parseFloat((totalHT*1.2).toFixed(2));
+  const num=nextFAC();
+  const productSummary=lines.map(l=>`${l.qty}x ${l.product}`).join(", ");
+
+  const ns={
+    id:Date.now(),invoiceNum:num,globalSeq:globalInvCounter,
+    client:clientName,clientId:clientObj?.id||null,
+    product:productSummary,
+    _lines:lines,
+    qty:lines.reduce((s,l)=>s+l.qty,0),
+    unitHT:lines[0]?.unitHT||0,
+    linkedStockId:lines[0]?.linkedStockId||null,
+    shipping:ship,totalTTC:ttc,date,source:"manual"
+  };
+  sales=[ns,...sales];
+
+  // Deduct stock for each line
+  lines.forEach(l=>{
+    if(!l.linkedStockId)return;
+    const stockItem=stock.find(s=>s.id===l.linkedStockId);
+    stock=stock.map(s=>s.id===l.linkedStockId?{...s,qty:Math.max(0,s.qty-l.qty),lastUpdate:date}:s);
+    if(stockItem?.shopifyVariantId) deductShopifyStock(stockItem, l.qty);
+  });
+
+  if(clientObj)clients=clients.map(c=>c.id===clientObj.id?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
+  closeModal();renderVentes();
+  notify(`✅ Vente ${num} · ${lines.length} produit${lines.length>1?"s":""} · ${fmtEur(ttc)}`);
+  ns._isNew=true; saveSale(ns);
+  // update stock in DB
+  lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)saveStock(s);}});
+  // update client total in DB
+  if(clientObj){const cl=clients.find(c=>c.id===clientObj.id);if(cl)saveClient(cl);}
+}
+
+// ═══════════════════════════ MODALS — ACHAT (multiproduits) ══════════════════
+function openAddPurchase(){
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
+    <div class="modal-hdr"><div class="modal-title">Nouvel achat</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Fournisseur</label>
+      <select class="input" id="p-sup-sel" onchange="onSupplierChange(this)">
+        <option value="">— Choisir un fournisseur —</option>
+        ${suppliers.map(s=>`<option value="${s.id}" data-name="${s.name}">${s.name}${s.email?" · "+s.email:""}</option>`).join("")}
+        <option value="__new__">+ Nouveau fournisseur…</option>
+      </select>
+    </div>
+    <div id="p-new-sup-wrap" style="display:none">
+      <div class="sub-box"><div class="sub-box-title">Nouveau fournisseur</div>
+        <div class="field"><label>Nom *</label><input class="input" id="p-sup-name" placeholder="Ex: Fournisseur Nord"/></div>
+        <div class="row2">
+          <div class="field"><label>Email</label><input class="input" type="email" id="p-sup-email" placeholder="contact@fourni.fr"/></div>
+          <div class="field"><label>Téléphone</label><input class="input" id="p-sup-phone" placeholder="01 23 45 67 89"/></div>
+        </div>
+        <div class="field"><label>Contact</label><input class="input" id="p-sup-contact" placeholder="Nom du contact"/></div>
+      </div>
+    </div>
+    <hr class="div"/>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:10px">Produits achetés</div>
+    <div id="purch-lines-wrap"></div>
+    <button class="btn btn-secondary" style="width:100%;margin-bottom:12px" onclick="purchAddLine()">+ Ajouter un produit</button>
+    <hr class="div"/>
+    <div class="row2">
+      <div class="field"><label>Date</label><input class="input" type="date" id="p-date" value="${new Date().toISOString().split("T")[0]}"/></div>
+      <div class="field"><label>Statut du stock</label>
+        <select class="input" id="p-status">
+          <option value="preparation">⏳ En préparation</option>
+          <option value="livraison">🚚 En livraison</option>
+          <option value="local">📦 Au local</option>
+        </select>
+      </div>
+    </div>
+    <div id="p-total-info" style="display:none;background:var(--orange-pale);border-radius:9px;padding:11px 13px;margin-bottom:13px;font-size:13px;color:#c45e0a"></div>
+    <div class="field"><label>Facture fournisseur (optionnel)</label><input type="file" id="p-file" accept=".pdf,.jpg,.png" style="font-size:12px;color:var(--muted)"/></div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitPurchase()">Enregistrer l'achat</button>
+  </div></div>`);
+  window._purchLines=[];
+  purchAddLine();
+}
+
+function onSupplierChange(sel){document.getElementById("p-new-sup-wrap").style.display=sel.value==="__new__"?"block":"none";}
+
+function purchAddLine(){
+  const id=++_lineCounter;
+  window._purchLines=[...(window._purchLines||[]),id];
+  const wrap=document.getElementById("purch-lines-wrap");
+  const div=document.createElement("div");
+  div.id=`pl-${id}`;
+  div.style.cssText="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:10px;align-items:end;background:#f7f8fc;padding:12px;border-radius:10px";
+  div.innerHTML=`
+    <div class="field" style="margin:0">
+      <label>Produit / Description</label>
+      <select class="input" id="pl-p-${id}" onchange="onPurchLineChange(${id},this)">
+        <option value="">— Choisir ou nouveau —</option>
+        ${stock.map(s=>`<option value="${s.id}" data-cost="${s.unitCostHT||0}">${s.name}</option>`).join("")}
+        <option value="__new__">+ Nouveau produit…</option>
+        <option value="__libre__">Description libre…</option>
+      </select>
+      <input class="input" id="pl-t-${id}" style="display:none;margin-top:6px" placeholder="Nom du produit…"/>
+    </div>
+    <div class="field" style="margin:0"><label>Qté</label><input class="input" type="number" id="pl-q-${id}" value="1" min="1" oninput="calcPurchTotal()"/></div>
+    <div class="field" style="margin:0"><label>Prix u. HT (€)</label><input class="input" type="number" id="pl-u-${id}" step="0.01" placeholder="0.00" oninput="calcPurchTotal()"/></div>
+    <button class="btn btn-sm btn-danger" style="height:38px;margin-bottom:1px" onclick="purchRemoveLine(${id})">✕</button>`;
+  wrap.appendChild(div);
+}
+
+function onPurchLineChange(id,sel){
+  const txt=document.getElementById(`pl-t-${id}`);
+  txt.style.display=(sel.value==="__new__"||sel.value==="__libre__")?"block":"none";
+  if(sel.value&&sel.value!=="__new__"&&sel.value!=="__libre__"){
+    const opt=sel.options[sel.selectedIndex];
+    const cost=parseFloat(opt.getAttribute("data-cost")||0);
+    if(cost>0)document.getElementById(`pl-u-${id}`).value=cost;
+    calcPurchTotal();
+  }
+}
+
+function purchRemoveLine(id){
+  const el=document.getElementById(`pl-${id}`);if(el)el.remove();
+  window._purchLines=(window._purchLines||[]).filter(x=>x!==id);
+  calcPurchTotal();
+}
+
+function calcPurchTotal(){
+  let ht=0;
+  (window._purchLines||[]).forEach(id=>{
+    ht+=(parseFloat(document.getElementById(`pl-q-${id}`)?.value||0))*(parseFloat(document.getElementById(`pl-u-${id}`)?.value||0));
+  });
+  const info=document.getElementById("p-total-info");if(!info)return;
+  if(ht>0){info.style.display="block";info.innerHTML=`Total HT : <b>${fmtEur(ht)}</b> · TTC : <b>${fmtEur(ht*1.2)}</b>`;}
+  else info.style.display="none";
+}
+
+function submitPurchase(){
+  const supSel=document.getElementById("p-sup-sel").value;
+  let supName="",supplierId=null;
+  if(supSel==="__new__"){
+    supName=document.getElementById("p-sup-name").value.trim();
+    if(!supName){notify("⚠ Entrez le nom du fournisseur");return;}
+    const ns={id:Date.now(),name:supName,contact:document.getElementById("p-sup-contact").value.trim(),email:document.getElementById("p-sup-email").value.trim(),phone:document.getElementById("p-sup-phone").value.trim()};
+    suppliers=[...suppliers,ns];supplierId=ns.id;
+  }else if(supSel){const s=suppliers.find(x=>x.id===parseInt(supSel));supName=s?.name||"";supplierId=s?.id||null;}
+  if(!supName){notify("⚠ Sélectionnez un fournisseur");return;}
+
+  // Build purchase lines
+  const lines=[];
+  for(const id of(window._purchLines||[])){
+    const prodSel=document.getElementById(`pl-p-${id}`);
+    const qty=parseInt(document.getElementById(`pl-q-${id}`)?.value||0);
+    const uht=parseFloat(document.getElementById(`pl-u-${id}`)?.value||0);
+    if(!qty||!uht)continue;
+    let prodName="",linkedStockId=null;
+    if(prodSel.value==="__new__"||prodSel.value==="__libre__"){
+      prodName=document.getElementById(`pl-t-${id}`)?.value.trim()||"Produit";
+      if(prodSel.value==="__new__"&&prodName){
+        const ns={id:Date.now()+Math.floor(Math.random()*10000),name:prodName,qty:0,reserved:0,unitCostHT:uht,shopifyLinked:false,lastUpdate:new Date().toISOString().split("T")[0]};
+        stock=[...stock,ns];linkedStockId=ns.id;
+      }
+    }else if(prodSel.value){
+      linkedStockId=parseInt(prodSel.value);
+      prodName=prodSel.options[prodSel.selectedIndex]?.text||"Produit";
+      stock=stock.map(s=>s.id===linkedStockId?{...s,unitCostHT:uht}:s);
+    }
+    lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId});
+  }
+  if(!lines.length){notify("⚠ Ajoutez au moins un produit");return;}
+
+  const date=document.getElementById("p-date").value;
+  const status=document.getElementById("p-status").value;
+  const file=document.getElementById("p-file").files[0];
+  const totalHT=parseFloat(lines.reduce((s,l)=>s+l.totalHT,0).toFixed(2));
+  const totalQty=lines.reduce((s,l)=>s+l.qty,0);
+  const desc=lines.map(l=>`${l.qty}x ${l.product}`).join(", ");
+
+  const np={
+    id:Date.now(),supplier:supName,supplierId,
+    description:desc,
+    _lines:lines,
+    qty:totalQty,
+    unitHT:lines[0]?.unitHT||0,
+    amountHT:totalHT,
+    date,hasInvoice:!!file,invoiceFile:file?.name||null,
+    stockStatus:status,
+    linkedStockId:lines[0]?.linkedStockId||null
+  };
+  purchases=[np,...purchases];
+
+  // If status is "local", add directly to stock right now (no function indirection)
+  if(status==="local"){
+    lines.forEach(l=>{
+      if(!l.linkedStockId)return;
+      stock=stock.map(s=>{
+        if(s.id===l.linkedStockId){
+          return {...s, qty: s.qty + l.qty, lastUpdate: date};
+        }
+        return s;
+      });
+    });
+  }
+
+  closeModal();renderAchats();renderStock();
+  notify(`✅ Achat enregistré · ${lines.length} produit${lines.length>1?"s":""} · ${fmtEur(totalHT)} HT`);
+  np._isNew=true; savePurchase(np);
+  if(status==="local") lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)saveStock(s);}});
+}
+
+// ═══════════════════════════ MODALS — CLIENT ══════════════════════════════════
+function _openClientModal(c){
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">${c?"Modifier le client":"Nouveau client"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Nom / Entreprise *</label><input class="input" id="cl-name" value="${c?.name||""}" placeholder="Ex: Boutique Rosa"/></div>
+    <div class="field"><label>Adresse</label><input class="input" id="cl-addr" value="${c?.address||""}" placeholder="12 rue de la Paix, 75001 Paris"/></div>
+    <div class="row2">
+      <div class="field"><label>SIRET</label><input class="input" id="cl-siret" value="${c?.siret||""}" placeholder="48291038200014"/></div>
+      <div class="field"><label>N° TVA intracommunautaire</label><input class="input" id="cl-tva" value="${c?.tvaIntra||""}" placeholder="FR00123456789"/></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Email</label><input class="input" type="email" id="cl-email" value="${c?.email||""}" placeholder="contact@client.fr"/></div>
+      <div class="field"><label>Téléphone</label><input class="input" id="cl-phone" value="${c?.phone||""}" placeholder="01 23 45 67 89"/></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitClient(${c?.id||"null"})">${c?"Enregistrer":"Créer le client"}</button>
+  </div></div>`);
+}
+function openAddClient(){_openClientModal(null);}
+function submitClient(id){
+  const name=document.getElementById("cl-name").value.trim();
+  if(!name){notify("⚠ Nom obligatoire");return;}
+  const data={name,address:document.getElementById("cl-addr").value.trim(),siret:document.getElementById("cl-siret").value.trim(),tvaIntra:document.getElementById("cl-tva").value.trim(),email:document.getElementById("cl-email").value.trim(),phone:document.getElementById("cl-phone").value.trim()};
+  if(id){clients=clients.map(c=>c.id===id?{...c,...data}:c);}
+  else{clients=[...clients,{id:Date.now(),...data,totalPurchases:0}];}
+  closeModal();renderClients("");
+  notify(`✅ Client "${name}" ${id?"mis à jour":"créé"}`);
+}
+
+// ═══════════════════════════ MODALS — STOCK ═══════════════════════════════════
+function openAddStock(id){
+  const s=id?stock.find(x=>x.id===id):null;
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">${s?"Modifier le stock":"Nouveau produit"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Nom du produit</label><input class="input" id="sk-name" value="${s?.name||""}" placeholder="Ex: Salopette Dickies"/></div>
+    <div class="row2">
+      <div class="field"><label>Quantité</label><input class="input" type="number" id="sk-qty" value="${s?.qty||0}" min="0"/></div>
+      <div class="field"><label>Coût unit. HT (€)</label><input class="input" type="number" id="sk-cost" value="${s?.unitCostHT||0}" step="0.01"/></div>
+    </div>
+    <div class="field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600"><input type="checkbox" id="sk-linked" ${s?.shopifyLinked?"checked":""} style="width:15px;height:15px;accent-color:var(--orange)"/> Lié à Shopify</label></div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitStock(${id||"null"})">Enregistrer</button>
+  </div></div>`);
+}
+function submitStock(id){
+  const name=document.getElementById("sk-name").value.trim();
+  const qty=parseInt(document.getElementById("sk-qty").value)||0;
+  const cost=parseFloat(document.getElementById("sk-cost").value)||0;
+  const linked=document.getElementById("sk-linked").checked;
+  const today=new Date().toISOString().split("T")[0];
+  let stockItem;
+  if(id){stock=stock.map(s=>s.id===id?(stockItem={...s,name,qty,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today}):s);}
+  else{stockItem={id:"tmp-"+Date.now(),name,qty,reserved:0,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today,_isNew:true};stock=[...stock,stockItem];}
+  closeModal();renderStock();notify("✅ Stock mis à jour");
+  saveStock(stockItem);
+}
+
+// ═══════════════════════════ MODALS — CHARGE ══════════════════════════════════
+function openAddCharge(id){
+  const ch=id?charges.find(x=>x.id===id):null;
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">${ch?"Modifier la charge":"Nouvelle charge"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Nom *</label><input class="input" id="ch-name" value="${ch?.name||""}" placeholder="Ex: Loyer, Cartons, Abonnement logiciel…"/></div>
+    <div class="row2">
+      <div class="field"><label>Type</label><select class="input" id="ch-type">
+        <option value="fixe" ${!ch||ch.type==="fixe"?"selected":""}>🔒 Fixe</option>
+        <option value="variable" ${ch?.type==="variable"?"selected":""}>📦 Variable</option>
+      </select></div>
+      <div class="field"><label>Catégorie</label><input class="input" id="ch-cat" value="${ch?.category||""}" placeholder="Ex: Logistique, Loyer…"/></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Montant HT (€)</label><input class="input" type="number" id="ch-amount" value="${ch?.amountHT||""}" step="0.01" placeholder="250"/></div>
+      <div class="field"><label>Périodicité</label><select class="input" id="ch-period">
+        <option value="mensuel" ${!ch||ch.period==="mensuel"?"selected":""}>Mensuel</option>
+        <option value="annuel" ${ch?.period==="annuel"?"selected":""}>Annuel</option>
+        <option value="unitaire" ${ch?.period==="unitaire"?"selected":""}>Unitaire</option>
+      </select></div>
+    </div>
+    <div class="field"><label>Note (optionnel)</label><input class="input" id="ch-note" value="${ch?.note||""}" placeholder="Ex: par colis expédié"/></div>
+    <div class="field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600"><input type="checkbox" id="ch-active" ${ch?.active!==false?"checked":""} style="width:15px;height:15px;accent-color:var(--orange)"/> Charge active</label></div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitCharge(${id||"null"})">Enregistrer</button>
+  </div></div>`);
+}
+function submitCharge(id){
+  const name=document.getElementById("ch-name").value.trim();
+  if(!name){notify("⚠ Nom obligatoire");return;}
+  const ch={id:id||Date.now(),name,type:document.getElementById("ch-type").value,category:document.getElementById("ch-cat").value.trim(),amountHT:parseFloat(document.getElementById("ch-amount").value)||0,period:document.getElementById("ch-period").value,note:document.getElementById("ch-note").value.trim(),active:document.getElementById("ch-active").checked};
+  if(id)charges=charges.map(x=>x.id===id?ch:x);else{ch._isNew=true;charges=[...charges,ch];}
+  closeModal();renderCharges();notify(`✅ Charge "${name}" ${id?"mise à jour":"créée"}`);
+  saveCharge(ch);
+}
+
+// ═══════════════════════════ MODALS — FACTURE DIRECTE ═════════════════════════
+function openCreateInvoice(){
+  const clientOpts=clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+  const stockOpts=stock.map(s=>`<option value="${s.id}" data-cost="${s.unitCostHT||0}" data-name="${s.name}">${s.name}</option>`).join("");
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
+    <div class="modal-hdr"><div class="modal-title">🧾 Créer une facture</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Client</label><select class="input" id="inv-cid" onchange="invClientChange(this)">
+      <option value="">— Sélectionner —</option>${clientOpts}
+      <option value="__new__">+ Nouveau client…</option>
+    </select></div>
+    <div id="inv-new-client" style="display:none"><div class="sub-box"><div class="sub-box-title">Nouveau client</div>
+      <div class="field"><label>Nom *</label><input class="input" id="inv-cname" placeholder="Ex: Boutique Élise"/></div>
+      <div class="field"><label>Adresse</label><input class="input" id="inv-caddr" placeholder="12 rue de la Paix, 75001 Paris"/></div>
+      <div class="row2"><div class="field"><label>SIRET</label><input class="input" id="inv-csiret" placeholder="48291038200014"/></div><div class="field"><label>N° TVA</label><input class="input" id="inv-ctva" placeholder="FR00123456789"/></div></div>
+      <div class="row2"><div class="field"><label>Email</label><input class="input" type="email" id="inv-cemail"/></div><div class="field"><label>Téléphone</label><input class="input" id="inv-cphone"/></div></div>
+    </div></div>
+    <hr class="div"/>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:12px">Lignes de facturation</div>
+    <div id="inv-lines"></div>
+    <button class="btn btn-secondary" style="width:100%;margin-bottom:14px" onclick="invAddLine()">+ Ajouter une ligne</button>
+    <hr class="div"/>
+    <div class="row2">
+      <div class="field"><label>Frais de livraison HT (€)</label><input class="input" type="number" id="inv-ship" value="0" step="0.01" oninput="invCalc()"/></div>
+      <div class="field"><label>Date</label><input class="input" type="date" id="inv-date" value="${new Date().toISOString().split("T")[0]}"/></div>
+    </div>
+    <div id="inv-total-preview" style="display:none;background:var(--orange-pale);border-radius:9px;padding:12px 14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#c45e0a;margin-bottom:4px"><span>HT</span><span id="inv-ht">—</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#c45e0a;margin-bottom:4px"><span>TVA 20%</span><span id="inv-tva">—</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:800;color:#c45e0a"><span>TTC</span><span id="inv-ttc">—</span></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitCreateInvoice()">Créer et télécharger</button>
+  </div></div>`);
+  window._invLines=[];invAddLine();
+}
+function invClientChange(sel){document.getElementById("inv-new-client").style.display=sel.value==="__new__"?"block":"none";}
+function invAddLine(){
+  // use incrementing counter to avoid ID collisions
+  const stockOpts=stock.map(s=>`<option value="${s.id}" data-cost="${s.unitCostHT||0}" data-name="${s.name}">${s.name}</option>`).join("");
+  const id=++_lineCounter;window._invLines=[...(window._invLines||[]),id];
+  const div=document.createElement("div");div.id=`il-${id}`;
+  div.style.cssText="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;margin-bottom:10px;align-items:end";
+  div.innerHTML=`<div class="field" style="margin:0"><label>Produit</label>
+    <select class="input" id="il-p-${id}" onchange="invProdChange(${id},this)">
+      <option value="">— Choisir —</option>${stockOpts}<option value="__libre__">Texte libre…</option>
+    </select>
+    <input class="input" id="il-t-${id}" style="display:none;margin-top:6px" placeholder="Description libre"/>
+  </div>
+  <div class="field" style="margin:0"><label>Qté</label><input class="input" type="number" id="il-q-${id}" value="1" min="1" oninput="invCalc()"/></div>
+  <div class="field" style="margin:0"><label>Prix u. HT</label><input class="input" type="number" id="il-u-${id}" step="0.01" placeholder="0.00" oninput="invCalc()"/></div>
+  <button class="btn btn-sm btn-danger" style="height:38px;margin-bottom:1px" onclick="invRemoveLine(${id})">✕</button>`;
+  document.getElementById("inv-lines").appendChild(div);
+}
+function invProdChange(id,sel){
+  document.getElementById(`il-t-${id}`).style.display=sel.value==="__libre__"?"block":"none";
+  if(sel.value&&sel.value!=="__libre__"){const opt=sel.options[sel.selectedIndex];const cost=parseFloat(opt.getAttribute("data-cost")||0);document.getElementById(`il-u-${id}`).value=cost||"";invCalc();}
+}
+function invRemoveLine(id){const el=document.getElementById(`il-${id}`);if(el)el.remove();window._invLines=(window._invLines||[]).filter(x=>x!==id);invCalc();}
+function invCalc(){
+  let ht=0;(window._invLines||[]).forEach(id=>{ht+=(parseFloat(document.getElementById(`il-q-${id}`)?.value||0))*(parseFloat(document.getElementById(`il-u-${id}`)?.value||0));});
+  ht+=parseFloat(document.getElementById("inv-ship")?.value||0);
+  const p=document.getElementById("inv-total-preview");if(!p)return;
+  if(ht>0){p.style.display="block";document.getElementById("inv-ht").textContent=fmtEur(ht);document.getElementById("inv-tva").textContent=fmtEur(ht*0.2);document.getElementById("inv-ttc").textContent=fmtEur(ht*1.2);}else p.style.display="none";
+}
+function submitCreateInvoice(){
+  const cidSel=document.getElementById("inv-cid").value;
+  let clientObj=null,clientName="";
+  if(cidSel==="__new__"){
+    clientName=document.getElementById("inv-cname").value.trim();
+    if(!clientName){notify("⚠ Entrez le nom du client");return;}
+    clientObj={id:Date.now(),name:clientName,address:document.getElementById("inv-caddr")?.value.trim()||"",siret:document.getElementById("inv-csiret")?.value.trim()||"",tvaIntra:document.getElementById("inv-ctva")?.value.trim()||"",email:document.getElementById("inv-cemail")?.value.trim()||"",phone:document.getElementById("inv-cphone")?.value.trim()||"",totalPurchases:0};
+    clients=[...clients,clientObj];
+  }else if(cidSel){clientObj=clients.find(c=>c.id===parseInt(cidSel));clientName=clientObj?.name||"";}
+  if(!clientName){notify("⚠ Sélectionnez un client");return;}
+  const lines=[];let totalHT=0;
+  for(const id of(window._invLines||[])){
+    const prodSel=document.getElementById(`il-p-${id}`);
+    const prodText=document.getElementById(`il-t-${id}`);
+    const qty=parseFloat(document.getElementById(`il-q-${id}`)?.value||0);
+    const uht=parseFloat(document.getElementById(`il-u-${id}`)?.value||0);
+    if(!qty||!uht)continue;
+    let pname=prodSel.value==="__libre__"?prodText?.value||"Prestation":prodSel.value?prodSel.options[prodSel.selectedIndex]?.getAttribute("data-name")||"Produit":"Produit";
+    lines.push({product:pname,qty,unitHT:uht,totalHT:qty*uht});totalHT+=qty*uht;
+  }
+  if(!lines.length){notify("⚠ Ajoutez au moins une ligne");return;}
+  const ship=parseFloat(document.getElementById("inv-ship")?.value||0);
+  totalHT+=ship;const ttc=parseFloat((totalHT*1.2).toFixed(2));
+  const date=document.getElementById("inv-date").value;
+  const num=nextFAC();
+  const ns={id:Date.now(),invoiceNum:num,globalSeq:globalInvCounter,client:clientName,clientId:clientObj?.id||null,product:lines.map(l=>l.product).join(", "),qty:lines[0]?.qty||1,unitHT:lines[0]?.unitHT||0,shipping:ship,totalTTC:ttc,date,source:"manual",_lines:lines};
+  sales=[ns,...sales];
+  if(clientObj)clients=clients.map(c=>c.id===clientObj.id?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
+  const html=buildInvoiceHTML(num,clientObj,lines,date,ship);
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([html],{type:"text/html"}));a.download=`${num}-${clientName.replace(/\s/g,"_")}.html`;a.click();
+  closeModal();renderFactures();notify(`🧾 Facture ${num} créée et téléchargée`);
+}
+
+// ═══════════════════════════ MODALS — FOURNISSEUR ═════════════════════════════
+function openSupplierDetail(id){
+  const s=suppliers.find(x=>x.id===id);if(!s)return;
+  const hist=purchases.filter(p=>p.supplierId===id);
+  const totalHT=hist.reduce((a,p)=>a+p.amountHT,0);
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
+    <div class="modal-hdr"><div class="modal-title">🏭 ${s.name}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="row2" style="margin-bottom:16px">
+      <div class="sub-box"><div class="sub-box-title">Contact</div><div style="font-size:13px;font-weight:600">${s.contact||"—"}</div></div>
+      <div class="sub-box"><div class="sub-box-title">Téléphone</div><div style="font-size:13px;font-weight:600">${s.phone||"—"}</div></div>
+      <div class="sub-box"><div class="sub-box-title">Email</div><div style="font-size:13px;font-weight:600">${s.email?`<a href="mailto:${s.email}" style="color:var(--orange)">${s.email}</a>`:"—"}</div></div>
+      <div class="sub-box" style="background:var(--orange-pale)"><div class="sub-box-title" style="color:#c45e0a">Total achats HT</div><div style="font-size:15px;font-weight:800;color:#c45e0a">${fmtEur(totalHT)}</div></div>
+    </div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:10px">Historique (${hist.length})</div>
+    ${hist.length===0?`<p style="color:var(--light);font-size:13px">Aucun achat.</p>`:`<div class="tbl-wrap"><table><thead><tr><th>Description</th><th>Qté</th><th>Total HT</th><th>Date</th><th>Statut</th></tr></thead><tbody>${hist.map(p=>`<tr><td style="padding:9px 14px;color:var(--muted)">${p.description}</td><td style="padding:9px 14px;font-weight:600">${p.qty}</td><td style="padding:9px 14px;font-weight:700;color:var(--red)">-${fmtEur(p.amountHT)}</td><td style="padding:9px 14px;color:var(--muted)">${fmtDate(p.date)}</td><td style="padding:9px 14px"><span class="badge ${STATUS[p.stockStatus]?.bc||"bx"}">${STATUS[p.stockStatus]?.icon} ${STATUS[p.stockStatus]?.label}</span></td></tr>`).join("")}</tbody></table></div>`}
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-secondary" style="flex:1" onclick="openEditSupplier(${id})">✏️ Modifier</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSupplier(${id})">Supprimer</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
+    </div>
+  </div></div>`);
+}
+function openEditSupplier(id){
+  const s=suppliers.find(x=>x.id===id);if(!s)return;
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">✏️ Modifier fournisseur</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Nom</label><input class="input" id="es-name" value="${s.name}"/></div>
+    <div class="row2"><div class="field"><label>Email</label><input class="input" type="email" id="es-email" value="${s.email||""}"/></div><div class="field"><label>Téléphone</label><input class="input" id="es-phone" value="${s.phone||""}"/></div></div>
+    <div class="field"><label>Contact</label><input class="input" id="es-contact" value="${s.contact||""}"/></div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitEditSupplier(${id})">Enregistrer</button>
+  </div></div>`);
+}
+function submitEditSupplier(id){
+  const name=document.getElementById("es-name").value.trim();if(!name){notify("⚠ Nom obligatoire");return;}
+  suppliers=suppliers.map(s=>s.id===id?{...s,name,email:document.getElementById("es-email").value.trim(),phone:document.getElementById("es-phone").value.trim(),contact:document.getElementById("es-contact").value.trim()}:s);
+  purchases=purchases.map(p=>p.supplierId===id?{...p,supplier:name}:p);
+  closeModal();renderAchats();notify("✅ Fournisseur mis à jour");
+}
+function deleteSupplier(id){if(!confirm("Supprimer ce fournisseur ?"))return;suppliers=suppliers.filter(s=>s.id!==id);closeModal();renderAchats();notify("🗑 Fournisseur supprimé");}
+
+// ═══════════════════════════ MODALS — ENTREPRISE & SHOPIFY ═══════════════════
+function openCompanySettings(){
+  const ci=companyInfo;
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
+    <div class="modal-hdr"><div class="modal-title">🏢 Mon entreprise</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div style="font-size:11px;background:var(--orange-pale);border-radius:8px;padding:10px 13px;margin-bottom:16px;color:#c45e0a">Ces informations apparaissent sur toutes vos factures.</div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:10px">Identité</div>
+    <div class="row2"><div class="field"><label>Nom de l'entreprise</label><input class="input" id="ci-name" value="${ci.name}"/></div><div class="field"><label>Forme juridique</label><input class="input" id="ci-form" value="${ci.legalForm}" placeholder="SAS, SARL, EI…"/></div></div>
+    <div class="row2"><div class="field"><label>Capital social (€)</label><input class="input" id="ci-capital" value="${ci.capital}" placeholder="10000"/></div><div class="field"><label>RCS</label><input class="input" id="ci-rcs" value="${ci.rcs}" placeholder="Paris B 123 456 789"/></div></div>
+    <div class="row2"><div class="field"><label>SIRET *</label><input class="input" id="ci-siret" value="${ci.siret}" placeholder="123 456 789 00012"/></div><div class="field"><label>N° TVA intracommunautaire *</label><input class="input" id="ci-tva" value="${ci.tvaIntra}" placeholder="FR00123456789"/></div></div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin:14px 0 10px">Adresse & contact</div>
+    <div class="field"><label>Adresse</label><input class="input" id="ci-addr" value="${ci.address}" placeholder="12 rue de la Paix"/></div>
+    <div class="row2"><div class="field"><label>Code postal & ville</label><input class="input" id="ci-city" value="${ci.zipCity}" placeholder="75001 Paris"/></div><div class="field"><label>Téléphone</label><input class="input" id="ci-phone" value="${ci.phone}"/></div></div>
+    <div class="row2"><div class="field"><label>Email</label><input class="input" type="email" id="ci-email" value="${ci.email}"/></div><div class="field"><label>Site web</label><input class="input" id="ci-web" value="${ci.website}"/></div></div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin:14px 0 10px">Banque & paiement</div>
+    <div class="row2"><div class="field"><label>IBAN</label><input class="input" id="ci-iban" value="${ci.iban}" placeholder="FR76 XXXX XXXX"/></div><div class="field"><label>BIC</label><input class="input" id="ci-bic" value="${ci.bic}" placeholder="BNPAFRPP"/></div></div>
+    <div class="row2"><div class="field"><label>Banque</label><input class="input" id="ci-bank" value="${ci.bank}"/></div><div class="field"><label>Délai de paiement (jours)</label><input class="input" type="number" id="ci-delay" value="${ci.paymentTerms}"/></div></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:6px" onclick="submitCompanySettings()">💾 Sauvegarder</button>
+  </div></div>`);
+}
+function submitCompanySettings(){
+  companyInfo={name:document.getElementById("ci-name").value,legalForm:document.getElementById("ci-form").value,capital:document.getElementById("ci-capital").value,rcs:document.getElementById("ci-rcs").value,siret:document.getElementById("ci-siret").value,tvaIntra:document.getElementById("ci-tva").value,address:document.getElementById("ci-addr").value,zipCity:document.getElementById("ci-city").value,phone:document.getElementById("ci-phone").value,email:document.getElementById("ci-email").value,website:document.getElementById("ci-web").value,iban:document.getElementById("ci-iban").value,bic:document.getElementById("ci-bic").value,bank:document.getElementById("ci-bank").value,paymentTerms:document.getElementById("ci-delay").value,lateInterest:"3 fois le taux légal",recoveryFee:"40"};
+  closeModal();notify("✅ Informations entreprise sauvegardées");
+  saveCompanyInfo();
+}
+// ═══════════════════════════ SHOPIFY API ═════════════════════════════════════
+// Toutes les requêtes Shopify passent par le proxy Netlify /api/shopify/
+// Le token est stocké côté serveur dans les variables d'environnement Netlify
+
+async function shopifyFetch(endpoint, options = {}) {
+  const res = await fetch(`/api/shopify${endpoint}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (!res.ok) throw new Error(`Shopify API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// Charger les commandes Shopify
+async function loadShopifyOrders() {
+  try {
+    notify("⏳ Chargement des commandes Shopify…");
+    const data = await shopifyFetch("/orders.json?status=any&limit=250");
+    const orders = data.orders || [];
+    shopify = orders.map(o => ({
+      id: o.id.toString(),
+      invoiceNum: "",
+      globalSeq: 0,
+      client: `${o.billing_address?.first_name || o.customer?.first_name || ""} ${o.billing_address?.last_name || o.customer?.last_name || ""}`.trim() || o.email || "Client Shopify",
+      clientEmail: o.email,
+      clientPhone: o.phone || o.billing_address?.phone || "",
+      clientAddress: o.billing_address ? `${o.billing_address.address1}, ${o.billing_address.zip} ${o.billing_address.city}` : "",
+      clientSiret: "",
+      product: o.line_items.map(l => `${l.name} x${l.quantity}`).join(", "),
+      lineItems: o.line_items.map(l => ({
+        product: l.name,
+        qty: l.quantity,
+        unitHT: parseFloat((parseFloat(l.price) / 1.2).toFixed(4)),
+        totalHT: parseFloat((parseFloat(l.price) * l.quantity / 1.2).toFixed(2)),
+      })),
+      qty: o.line_items.reduce((s, l) => s + l.quantity, 0),
+      unitHT: parseFloat((parseFloat(o.subtotal_price) / 1.2 / Math.max(1, o.line_items.reduce((s,l)=>s+l.quantity,0))).toFixed(4)),
+      totalTTC: parseFloat(o.total_price),
+      date: o.created_at.split("T")[0],
+      status: o.financial_status === "paid" ? "paid" : o.financial_status === "refunded" ? "refunded" : "pending",
+      source: "shopify",
+      trackingNumbers: o.fulfillments?.flatMap(f => f.tracking_numbers || []) || [],
+      nbColis: o.fulfillments?.reduce((s, f) => s + (f.tracking_numbers?.length || (f.status !== "pending" ? 1 : 0)), 0) || 0,
+      shopifyOrderId: o.id,
+      shopifyOrderNumber: o.order_number,
+    }));
+    shopifyConnected = true;
+    renderDashboard();
+    notify(`✅ ${orders.length} commandes Shopify chargées`);
+  } catch (err) {
+    notify("❌ Erreur Shopify : " + err.message);
+    console.error(err);
+  }
+}
+
+// Charger les produits et stock Shopify
+async function loadShopifyStock() {
+  try {
+    const data = await shopifyFetch("/products.json?limit=250");
+    const products = data.products || [];
+    // Fusionner avec le stock local
+    products.forEach(p => {
+      p.variants.forEach(v => {
+        const existing = stock.find(s => s.shopifyVariantId === v.id || s.name.toLowerCase() === p.title.toLowerCase());
+        if (existing) {
+          existing.shopifyProductId = p.id;
+          existing.shopifyVariantId = v.id;
+          existing.shopifyLinked = true;
+          if (v.inventory_quantity !== undefined) existing.shopifyQty = v.inventory_quantity;
+        } else if (v.inventory_management === "shopify") {
+          stock.push({
+            id: Date.now() + Math.random(),
+            name: p.variants.length > 1 ? `${p.title} — ${v.title}` : p.title,
+            qty: v.inventory_quantity || 0,
+            reserved: 0,
+            unitCostHT: 0,
+            shopifyLinked: true,
+            shopifyProductId: p.id,
+            shopifyVariantId: v.id,
+            lastUpdate: new Date().toISOString().split("T")[0],
+          });
+        }
+      });
+    });
+    renderStock();
+    notify("✅ Stock Shopify synchronisé");
+  } catch (err) {
+    notify("❌ Erreur stock Shopify : " + err.message);
+  }
+}
+
+// Déduire le stock Shopify lors d'une vente hors site
+async function deductShopifyStock(stockItem, qty) {
+  if (!stockItem?.shopifyVariantId) return;
+  try {
+    // Récupère l'inventory_item_id et location_id
+    const variantData = await shopifyFetch(`/variants/${stockItem.shopifyVariantId}.json`);
+    const inventoryItemId = variantData.variant?.inventory_item_id;
+    if (!inventoryItemId) return;
+
+    const levelsData = await shopifyFetch(`/inventory_levels.json?inventory_item_ids=${inventoryItemId}`);
+    const level = levelsData.inventory_levels?.[0];
+    if (!level) return;
+
+    await shopifyFetch("/inventory_levels/adjust.json", {
+      method: "POST",
+      body: JSON.stringify({
+        location_id: level.location_id,
+        inventory_item_id: inventoryItemId,
+        available_adjustment: -qty,
+      }),
+    });
+    notify(`✅ Stock Shopify mis à jour (-${qty} unités)`);
+  } catch (err) {
+    notify("⚠ Stock local mis à jour, Shopify : " + err.message);
+  }
+}
+
+let shopifyConnected = false;
+
+function openShopifyConfig(){
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">⚙ Connexion Shopify</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    ${shopifyConnected
+      ? `<div style="background:var(--green-pale);border-radius:9px;padding:13px;margin-bottom:16px;font-size:13px;color:var(--green)">✅ Shopify connecté et actif</div>`
+      : `<div style="background:var(--yellow-pale);border-radius:9px;padding:12px;margin-bottom:16px;font-size:12px;color:#92400e;line-height:1.7">Le token Shopify est configuré côté serveur Netlify (variables d'environnement). Clique sur "Tester la connexion" pour vérifier.</div>`}
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-primary" onclick="loadShopifyOrders();closeModal()">🔄 Charger les commandes</button>
+      <button class="btn btn-secondary" onclick="loadShopifyStock();closeModal()">📦 Synchroniser le stock</button>
+      <button class="btn btn-secondary" onclick="testShopifyConnection()">🔍 Tester la connexion</button>
+    </div>
+  </div></div>`);
+}
+
+async function testShopifyConnection(){
+  try {
+    const data = await shopifyFetch("/shop.json");
+    notify(`✅ Connecté à : ${data.shop?.name} (${data.shop?.domain})`);
+    shopifyConnected = true;
+  } catch(err){
+    notify("❌ Connexion échouée : " + err.message);
+  }
+}
+
+function submitShopify(){closeModal();renderDashboard();notify("✅ Shopify configuré");}
+
+// ═══════════════════════════ DICTAPHONE ═══════════════════════════════════════
+let recognition=null;
+function openDicta(){
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
+    <div class="modal-hdr"><div class="modal-title">🎙 Dictaphone IA</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div id="dicta-content">
+      <div style="text-align:center;padding:16px 0">
+        <div style="font-size:52px;margin-bottom:14px">🎙</div>
+        <p style="color:var(--muted);font-size:13px;line-height:1.8;margin-bottom:22px">Parlez pour créer un client, enregistrer une vente, mettre à jour le stock ou changer le statut d'un achat.<br>
+        <em style="color:var(--orange)">"Créer le client Louis Dindault, 11 rue du charme 59960 Neuville, SIRET 10023032032, il achète 100 pulls à 8€ HT avec 25€ de livraison"</em><br>
+        <em style="color:var(--orange)">"Le fournisseur Nord est maintenant au local"</em></p>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button class="btn btn-primary" onclick="startRec()">🎙 Enregistrer</button>
+          <button class="btn btn-secondary" onclick="showManual()">✏️ Saisir manuellement</button>
+        </div>
+      </div>
+    </div>
+  </div></div>`);
+}
+function startRec(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><p style="color:var(--red);font-weight:700;margin-bottom:14px">Utilisez Chrome pour la reconnaissance vocale.</p><button class="btn btn-secondary" onclick="showManual()">✏️ Saisir manuellement</button></div>`;return;}
+  document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><div style="font-size:48px;margin-bottom:10px">🔴</div><p style="font-weight:800;font-size:16px;color:var(--navy);margin-bottom:6px">Enregistrement…</p><p style="color:var(--muted);font-size:13px;margin-bottom:20px">Parlez clairement</p><button class="btn btn-ghost" onclick="stopRec()">⏹ Arrêter</button></div>`;
+  recognition=new SR();recognition.lang="fr-FR";recognition.continuous=false;recognition.interimResults=false;
+  recognition.onresult=e=>showTranscript(e.results[0][0].transcript);
+  recognition.onerror=()=>{document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><p style="color:var(--red)">Erreur microphone.</p><br><button class="btn btn-secondary" onclick="showManual()">Saisir manuellement</button></div>`;};
+  recognition.start();
+}
+function stopRec(){recognition?.stop();}
+function showManual(){
+  document.getElementById("dicta-content").innerHTML=`<div class="field"><label>Tapez votre commande</label><textarea class="input" id="dt-text" rows="4" style="resize:vertical" placeholder="Ex : Le fournisseur Nord est maintenant au local"></textarea></div><div style="display:flex;gap:10px"><button class="btn btn-primary" onclick="analyzeText(document.getElementById('dt-text').value)">Analyser</button><button class="btn btn-secondary" onclick="openDicta()">Retour</button></div>`;
+}
+function showTranscript(txt){
+  document.getElementById("dicta-content").innerHTML=`<div class="sub-box" style="margin-bottom:16px"><div class="sub-box-title">Transcription</div><div style="color:var(--navy);font-size:13px;line-height:1.6">"${txt}"</div></div><div style="display:flex;gap:10px"><button class="btn btn-primary" onclick="analyzeText('${txt.replace(/'/g,"\\'").replace(/"/g,"&quot;")}')">Analyser avec l'IA</button><button class="btn btn-secondary" onclick="openDicta()">Recommencer</button></div>`;
+}
+async function analyzeText(text){
+  if(!text.trim())return;
+  document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:28px"><div style="font-size:40px;margin-bottom:12px">⚡</div><p style="font-weight:700;color:var(--navy);font-size:15px">Analyse en cours…</p></div>`;
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:`Tu es un assistant ERP. Analyse cette commande vocale et extrais les données en JSON uniquement, sans markdown ni backtick.\n\nCommande: "${text}"\n\nRetourne un JSON avec:\n{\n  "action": "create_sale"|"add_stock"|"create_client"|"mixed"|"update_purchase_status",\n  "client": {"name":"","address":"","siret":"","email":"","phone":""},\n  "sale": {"product":"","qty":0,"unitHT":0,"shipping":0,"totalTTC":0},\n  "stock": {"product":"","qty":0},\n  "purchaseStatus": {"supplier":"","newStatus":"preparation"|"livraison"|"local"},\n  "summary": "résumé court en français"\n}\nCalcule totalTTC=(qty*unitHT+shipping)*1.2. Réponds UNIQUEMENT avec le JSON.`}]})});
+    const data=await res.json();
+    const result=JSON.parse((data.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim());
+    showConfirm(result);
+  }catch{document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><p style="color:var(--red);font-weight:700;margin-bottom:10px">⚠ Erreur d'analyse</p><button class="btn btn-secondary" onclick="openDicta()">Réessayer</button></div>`;}
+}
+function showConfirm(result){
+  let html=`<div style="background:var(--orange-pale);border:1.5px solid var(--orange);border-radius:10px;padding:13px;margin-bottom:16px"><p style="font-size:10px;font-weight:700;color:#c45e0a;margin-bottom:3px">L'IA va effectuer :</p><p style="font-weight:700;font-size:13px">${result.summary||"Action détectée"}</p></div>`;
+  if(result.client?.name)html+=`<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Client</div><div class="sub-box" style="font-size:12px"><b>${result.client.name}</b>${result.client.address?" · "+result.client.address:""}${result.client.siret?"<br>SIRET : "+result.client.siret:""}</div></div>`;
+  if(result.sale?.product)html+=`<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Vente</div><div class="sub-box" style="font-size:12px">${result.sale.qty}x <b>${result.sale.product}</b> · ${fmtEur(result.sale.unitHT)}/u HT${result.sale.shipping>0?" · Livraison "+fmtEur(result.sale.shipping):""}<br><b style="color:var(--orange)">TTC : ${fmtEur(result.sale.totalTTC)}</b></div></div>`;
+  if(result.stock?.qty)html+=`<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Stock</div><div class="sub-box" style="font-size:12px">+${result.stock.qty} · <b>${result.stock.product}</b></div></div>`;
+  if(result.purchaseStatus?.supplier){const cfg=STATUS[result.purchaseStatus.newStatus]||STATUS.preparation;html+=`<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Statut achat</div><div class="sub-box" style="font-size:12px"><b>${result.purchaseStatus.supplier}</b> → ${cfg.icon} ${cfg.label}</div></div>`;}
+  html+=`<div style="display:flex;gap:10px;margin-top:16px"><button class="btn btn-primary" style="flex:1" onclick='applyDicta(${JSON.stringify(JSON.stringify(result))})'>✅ Confirmer</button><button class="btn btn-secondary" onclick="closeModal()">Annuler</button></div>`;
+  document.getElementById("dicta-content").innerHTML=html;
+}
+function applyDicta(jsonStr){
+  const result=JSON.parse(jsonStr);let msgs=[],clientName="Client";
+  if(result.client?.name){clients=[...clients,{id:Date.now(),name:result.client.name,address:result.client.address||"",siret:result.client.siret||"",tvaIntra:"",email:result.client.email||"",phone:result.client.phone||"",totalPurchases:0}];clientName=result.client.name;msgs.push("Client créé");}
+  if(result.sale?.product&&result.sale?.totalTTC){
+    const num=nextFAC();
+    sales=[{id:Date.now(),invoiceNum:num,globalSeq:globalInvCounter,client:clientName,product:result.sale.product,qty:result.sale.qty||1,unitHT:result.sale.unitHT||0,shipping:result.sale.shipping||0,totalTTC:result.sale.totalTTC,date:new Date().toISOString().split("T")[0],source:"manual"},...sales];
+    const m=stock.find(s=>s.name.toLowerCase().includes((result.sale.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));
+    if(m)stock=stock.map(s=>s.id===m.id?{...s,qty:Math.max(0,s.qty-(result.sale.qty||1))}:s);
+    msgs.push(`Vente ${num}`);
+  }
+  if(result.stock?.product&&result.stock?.qty){const m=stock.find(s=>s.name.toLowerCase().includes((result.stock.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m){stock=stock.map(s=>s.id===m.id?{...s,qty:s.qty+result.stock.qty}:s);msgs.push(`Stock +${result.stock.qty}`);}}
+  if(result.purchaseStatus?.supplier&&result.purchaseStatus?.newStatus){const m=purchases.find(p=>p.supplier.toLowerCase().includes((result.purchaseStatus.supplier||"").toLowerCase()));if(m){changeStatus(m.id,result.purchaseStatus.newStatus,{className:""});msgs.push("Statut mis à jour");}}
+  closeModal();
+  const active=document.querySelector(".nav-item.active");
+  if(active){const match=active.getAttribute("onclick").match(/goTo\('(\w+)'\)/);if(match)({dashboard:renderDashboard,ventes:renderVentes,achats:renderAchats,clients:()=>renderClients(""),stock:renderStock,charges:renderCharges,factures:renderFactures}[match[1]]||renderDashboard)();}
+  notify("🎙 "+(msgs.join(" · ")||"Action effectuée"));
+}
+
+// ═══════════════════════════ AUTH ═══════════════════════════════════════════
+const SALT = "BLC_SALT_2024";
+async function hashPwd(pwd) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pwd + SALT);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuffer)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+async function submitLogin(){
+  const username=document.getElementById("login-user").value.trim().toLowerCase();
+  const pwd=document.getElementById("login-pwd").value;
+  const errEl=document.getElementById("login-error");
+  if(!username||!pwd){errEl.style.display="block";errEl.textContent="⚠ Remplissez tous les champs";return;}
+  const hash=await hashPwd(pwd);
+  // Check against local users (will use Supabase when connected)
+  const passwords={
+    "barto":   "f2c65cfa6f5d96237ada6f8e7933a8bc5013858a254bb07f11f63d6751eecfe1",
+    "coco":    "e22fd8e3c5269144d020ef85d6e2be5393173166959d1ef5b2716441946af26c",
+    "louis":   "c86d7dcb154cc1ebb3b3d320bfde286e935c38d3f700127ccc07638c8ce5c1cd",
+    "thibault":"ddf0da014d92843de9dde66c1ce4744e5f245879374e6ff915c12e8c17a83871",
+  };
+  if(!passwords[username]||passwords[username]!==hash){
+    errEl.style.display="block";errEl.textContent="❌ Identifiants incorrects";return;
+  }
+  currentUser=allUsers.find(u=>u.username===username);
+  document.getElementById("login-overlay").style.display="none";
+  // Show user bar
+  const bar=document.getElementById("user-bar");bar.style.display="block";
+  const av=document.getElementById("user-avatar");
+  av.textContent=currentUser.display_name[0].toUpperCase();
+  av.style.background=currentUser.avatar_color;
+  document.getElementById("user-name").textContent=currentUser.display_name;
+  document.getElementById("user-role").textContent=currentUser.role;
+  notify(`👋 Bonjour ${currentUser.display_name} !`);
+}
+
+function logout(){
+  currentUser=null;
+  document.getElementById("login-overlay").style.display="flex";
+  document.getElementById("user-bar").style.display="none";
+  document.getElementById("login-user").value="";
+  document.getElementById("login-pwd").value="";
+}
+
+// ═══════════════════════════ TODO ════════════════════════════════════════════
+const PRIORITY_CONFIG = {
+  low:    {label:"Faible",  color:"var(--light)",  bg:"#f0f0f5"},
+  normal: {label:"Normal",  color:"var(--orange)", bg:"var(--orange-pale)"},
+  high:   {label:"Élevée",  color:"var(--red)",    bg:"var(--red-pale)"},
+  urgent: {label:"Urgent",  color:"#9333ea",       bg:"#f5f3ff"},
+};
+const STATUS_CONFIG = {
+  todo:        {label:"À faire",     icon:"📋", color:"var(--light)"},
+  in_progress: {label:"En cours",    icon:"⚡", color:"var(--orange)"},
+  done:        {label:"Terminé",     icon:"✅", color:"var(--green)"},
+};
+
+function setTodoFilter(f){
+  todoFilter=f;
+  document.querySelectorAll("[id^='todo-filter-']").forEach(b=>b.classList.remove("btn-primary"));
+  document.querySelectorAll("[id^='todo-filter-']").forEach(b=>b.classList.add("btn-secondary"));
+  const btn=document.getElementById("todo-filter-"+f);
+  if(btn){btn.classList.remove("btn-secondary");btn.classList.add("btn-primary");}
+  renderTodo();
+}
+
+function getFilteredTodos(){
+  let filtered=todos;
+  if(todoFilter==="mine")filtered=todos.filter(t=>t.assigned_to===currentUser?.id||t.created_by===currentUser?.id);
+  else if(todoFilter==="global")filtered=todos.filter(t=>t.is_global);
+  return filtered;
+}
+
+function renderTodo(){
+  const filtered=getFilteredTodos();
+  const total=filtered.length,done=filtered.filter(t=>t.status==="done").length;
+  document.getElementById("todo-sub").textContent=`${total} tâche${total>1?"s":""} · ${done} terminée${done>1?"s":""}`;
+
+  const cols={todo:[],in_progress:[],done:[]};
+  filtered.forEach(t=>{if(cols[t.status])cols[t.status].push(t);});
+
+  document.getElementById("todo-board").innerHTML=Object.entries(STATUS_CONFIG).map(([status,cfg])=>{
+    const items=cols[status]||[];
+    const pCfg=t=>PRIORITY_CONFIG[t.priority]||PRIORITY_CONFIG.normal;
+    const assignedUser=t=>allUsers.find(u=>u.id===t.assigned_to);
+    const creatorUser=t=>allUsers.find(u=>u.id===t.created_by);
+    return `<div class="todo-col">
+      <div class="todo-col-hdr" style="color:${cfg.color}">
+        <span>${cfg.icon} ${cfg.label}</span>
+        <span style="background:#f0f0f5;color:var(--muted);padding:2px 8px;border-radius:10px;font-size:10px">${items.length}</span>
+      </div>
+      <div style="padding:8px;min-height:100px">
+        ${items.length===0?`<div style="padding:20px 0;text-align:center;color:var(--light);font-size:12px">Aucune tâche</div>`:
+          items.sort((a,b)=>["urgent","high","normal","low"].indexOf(a.priority)-["urgent","high","normal","low"].indexOf(b.priority))
+          .map(t=>`
+          <div class="todo-card todo-priority-${t.priority}" onclick="openTodoDetail(${JSON.stringify(t).replace(/"/g,"&quot;")})">
+            ${t.is_global?`<span style="font-size:9px;background:#e8eaf0;color:var(--muted);padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:1px">GLOBAL</span>`:""}
+            <div style="font-weight:700;font-size:13px;color:var(--navy);margin:4px 0">${t.title}</div>
+            ${t.description?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.description}</div>`:""}
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+              <span style="font-size:10px;font-weight:700;background:${pCfg(t).bg};color:${pCfg(t).color};padding:2px 7px;border-radius:10px">${pCfg(t).label}</span>
+              <div style="display:flex;align-items:center;gap:4px">
+                ${t.due_date?`<span style="font-size:10px;color:var(--muted)">${fmtDate(t.due_date)}</span>`:""}
+                ${assignedUser(t)?`<div style="width:20px;height:20px;border-radius:5px;background:${assignedUser(t).avatar_color};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff">${assignedUser(t).display_name[0]}</div>`:""}
+              </div>
+            </div>
+          </div>`).join("")}
+        <button onclick="openAddTodo('${status}')" style="width:100%;background:transparent;border:1.5px dashed var(--border);border-radius:9px;padding:8px;color:var(--light);font-size:12px;cursor:pointer;font-family:'Barlow',sans-serif;margin-top:4px">+ Ajouter ici</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function openAddTodo(defaultStatus){
+  const userOpts=allUsers.map(u=>`<option value="${u.id}">${u.display_name}</option>`).join("");
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">+ Nouvelle tâche</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Titre *</label><input class="input" id="td-title" placeholder="Ex: Appeler le fournisseur…"/></div>
+    <div class="field"><label>Description</label><textarea class="input" id="td-desc" rows="2" style="resize:vertical" placeholder="Détails…"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>Assigner à</label>
+        <select class="input" id="td-assigned">
+          <option value="">— Globale (tout le monde) —</option>${userOpts}
+        </select>
+      </div>
+      <div class="field"><label>Priorité</label>
+        <select class="input" id="td-priority">
+          <option value="normal">Normal</option>
+          <option value="low">Faible</option>
+          <option value="high">Élevée</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Statut</label>
+        <select class="input" id="td-status">
+          <option value="todo" ${defaultStatus==="todo"||!defaultStatus?"selected":""}>📋 À faire</option>
+          <option value="in_progress" ${defaultStatus==="in_progress"?"selected":""}>⚡ En cours</option>
+          <option value="done" ${defaultStatus==="done"?"selected":""}>✅ Terminé</option>
+        </select>
+      </div>
+      <div class="field"><label>Échéance</label><input class="input" type="date" id="td-due"/></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitTodo(null)">Créer la tâche</button>
+  </div></div>`);
+}
+
+function openTodoDetail(t){
+  if(typeof t==="string")t=JSON.parse(t);
+  const assignedUser=allUsers.find(u=>u.id===t.assigned_to);
+  const creator=allUsers.find(u=>u.id===t.created_by);
+  const userOpts=allUsers.map(u=>`<option value="${u.id}" ${t.assigned_to===u.id?"selected":""}>${u.display_name}</option>`).join("");
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">✏️ Modifier la tâche</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Titre</label><input class="input" id="td-title" value="${t.title}"/></div>
+    <div class="field"><label>Description</label><textarea class="input" id="td-desc" rows="2" style="resize:vertical">${t.description||""}</textarea></div>
+    <div class="row2">
+      <div class="field"><label>Assigner à</label>
+        <select class="input" id="td-assigned">
+          <option value="" ${!t.assigned_to?"selected":""}>— Globale —</option>${userOpts}
+        </select>
+      </div>
+      <div class="field"><label>Priorité</label>
+        <select class="input" id="td-priority">
+          <option value="normal" ${t.priority==="normal"?"selected":""}>Normal</option>
+          <option value="low"    ${t.priority==="low"?"selected":""}>Faible</option>
+          <option value="high"   ${t.priority==="high"?"selected":""}>Élevée</option>
+          <option value="urgent" ${t.priority==="urgent"?"selected":""}>Urgent</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Statut</label>
+        <select class="input" id="td-status">
+          <option value="todo"        ${t.status==="todo"?"selected":""}>📋 À faire</option>
+          <option value="in_progress" ${t.status==="in_progress"?"selected":""}>⚡ En cours</option>
+          <option value="done"        ${t.status==="done"?"selected":""}>✅ Terminé</option>
+        </select>
+      </div>
+      <div class="field"><label>Échéance</label><input class="input" type="date" id="td-due" value="${t.due_date||""}"/></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="submitTodo('${t.id}')">Enregistrer</button>
+      <button class="btn btn-danger" onclick="deleteTodo('${t.id}')">Supprimer</button>
+    </div>
+    ${creator?`<div style="font-size:11px;color:var(--light);margin-top:12px;text-align:center">Créée par ${creator.display_name}</div>`:""}
+  </div></div>`);
+}
+
+function submitTodo(id){
+  const title=document.getElementById("td-title").value.trim();
+  if(!title){notify("⚠ Titre obligatoire");return;}
+  const assigned=document.getElementById("td-assigned").value||null;
+  const t={
+    id:id||("td-"+Date.now()),
+    title,
+    description:document.getElementById("td-desc").value.trim(),
+    assigned_to:assigned,
+    created_by:currentUser?.id||null,
+    priority:document.getElementById("td-priority").value,
+    status:document.getElementById("td-status").value,
+    due_date:document.getElementById("td-due").value||null,
+    is_global:!assigned,
+    created_at:new Date().toISOString(),
+  };
+  if(id){todos=todos.map(x=>x.id===id?{...x,...t}:x);saveTodo(t);}
+  else{t._isNew=true;todos=[t,...todos];saveTodo(t);}
+  closeModal();renderTodo();
+  notify(`✅ Tâche "${title}" ${id?"mise à jour":"créée"}${t.assigned_to?` → ${allUsers.find(u=>u.id===t.assigned_to)?.display_name}`:" (globale)"}`);
+}
+
+function deleteTodo(id){
+  if(!confirm("Supprimer cette tâche ?"))return;
+  todos=todos.filter(t=>t.id!==id);
+  closeModal();renderTodo();notify("🗑 Tâche supprimée");
+  dbDelete("todos",id);
+}
+
+// ═══════════════════════════ SUPABASE SYNC ═══════════════════════════════════
+const API = "/api/supabase"; // via netlify proxy
+
+async function dbGet(table, query="") {
+  try {
+    const res = await fetch(`${API}/data/${table}${query?"?"+query:""}`, {method:"GET"});
+    if(!res.ok) return [];
+    return await res.json() || [];
+  } catch(e) { console.warn("dbGet error", table, e); return []; }
+}
+async function dbPost(table, body) {
+  try {
+    const res = await fetch(`${API}/data/${table}`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    return await res.json();
+  } catch(e) { console.warn("dbPost error", table, e); return null; }
+}
+async function dbPatch(table, body) {
+  try {
+    const res = await fetch(`${API}/data/${table}`, {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    return await res.json();
+  } catch(e) { console.warn("dbPatch error", table, e); return null; }
+}
+async function dbDelete(table, id) {
+  try {
+    const res = await fetch(`${API}/data/${table}`, {method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id})});
+    return await res.json();
+  } catch(e) { console.warn("dbDelete error", table, e); return null; }
+}
+
+// Convert Supabase row → local format
+function rowToClient(r){return {id:r.id,name:r.name,address:r.address||"",zipCity:r.zip_city||"",siret:r.siret||"",tvaIntra:r.tva_intra||"",email:r.email||"",phone:r.phone||"",totalPurchases:parseFloat(r.total_purchases||0)};}
+function rowToStock(r){return {id:r.id,name:r.name,qty:r.qty||0,reserved:r.reserved||0,unitCostHT:parseFloat(r.unit_cost_ht||0),shopifyLinked:r.shopify_linked||false,shopifyProductId:r.shopify_product_id,shopifyVariantId:r.shopify_variant_id,lastUpdate:r.last_update};}
+function rowToSale(r){return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id};}
+function rowToPurchase(r){return {id:r.id,supplier:r.supplier_name,supplierId:r.supplier_id,description:r.description,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),amountHT:parseFloat(r.amount_ht||0),date:r.date,hasInvoice:r.has_invoice,invoiceFile:r.invoice_file,stockStatus:r.stock_status,linkedStockId:r.linked_stock_id};}
+function rowToCharge(r){return {id:r.id,name:r.name,type:r.type,category:r.category,amountHT:parseFloat(r.amount_ht||0),period:r.period,note:r.note,active:r.active!==false};}
+function rowToTodo(r){return {id:r.id,title:r.title,description:r.description,assigned_to:r.assigned_to,created_by:r.created_by,due_date:r.due_date,priority:r.priority||"normal",status:r.status||"todo",is_global:r.is_global,created_at:r.created_at};}
+function rowToSupplier(r){return {id:r.id,name:r.name,contact:r.contact||"",email:r.email||"",phone:r.phone||""};}
+
+// Load all data from Supabase
+async function loadAllData(){
+  notify("⏳ Chargement des données…");
+  try {
+    const [cls,stk,sls,purch,chrgs,todos_,sups,cmpny] = await Promise.all([
+      dbGet("clients","order=name"),
+      dbGet("stock","order=name"),
+      dbGet("sales","order=created_at.desc"),
+      dbGet("purchases","order=created_at.desc"),
+      dbGet("charges","order=name"),
+      dbGet("todos","order=created_at.desc"),
+      dbGet("suppliers","order=name"),
+      dbGet("company_info","id=eq.1"),
+    ]);
+    clients   = Array.isArray(cls)   ? cls.map(rowToClient)     : [];
+    stock     = Array.isArray(stk)   ? stk.map(rowToStock)      : [];
+    sales     = Array.isArray(sls)   ? sls.map(rowToSale)       : [];
+    purchases = Array.isArray(purch) ? purch.map(rowToPurchase) : [];
+    charges   = Array.isArray(chrgs) ? chrgs.map(rowToCharge)   : [];
+    todos     = Array.isArray(todos_)? todos_.map(rowToTodo)     : [];
+    suppliers = Array.isArray(sups)  ? sups.map(rowToSupplier)  : [];
+    if(Array.isArray(cmpny)&&cmpny[0]){
+      const ci=cmpny[0];
+      companyInfo={name:ci.name||"BLC Import",legalForm:ci.legal_form||"SAS",address:ci.address||"",zipCity:ci.zip_city||"",siret:ci.siret||"",tvaIntra:ci.tva_intra||"",capital:ci.capital||"",rcs:ci.rcs||"",email:ci.email||"",phone:ci.phone||"",website:ci.website||"",iban:ci.iban||"",bic:ci.bic||"",bank:ci.bank||"",paymentTerms:ci.payment_terms||"30",lateInterest:ci.late_interest||"3 fois le taux légal",recoveryFee:ci.recovery_fee||"40"};
+    }
+    // Sync invoice counter
+    const ctr = await dbGet("invoice_counter","id=eq.1");
+    if(Array.isArray(ctr)&&ctr[0]) globalInvCounter=ctr[0].current_value||0;
+    renderDashboard();
+    notify("✅ Données chargées");
+  } catch(e){
+    console.error("loadAllData error",e);
+    notify("⚠ Chargement local (Supabase non connecté)");
+    renderDashboard();
+  }
+}
+
+// ── DB SAVE HELPERS ──────────────────────────────────────────────────────────
+async function saveClient(clientObj){
+  const row={name:clientObj.name,address:clientObj.address,zip_city:clientObj.zipCity||"",siret:clientObj.siret,tva_intra:clientObj.tvaIntra,email:clientObj.email,phone:clientObj.phone,total_purchases:clientObj.totalPurchases||0};
+  if(clientObj._isNew){const r=await dbPost("clients",row);if(r&&r[0])clientObj.id=r[0].id;}
+  else await dbPatch("clients",{id:clientObj.id,...row});
+}
+async function saveStock(stockItem){
+  const row={name:stockItem.name,qty:stockItem.qty,reserved:stockItem.reserved||0,unit_cost_ht:stockItem.unitCostHT||0,shopify_linked:stockItem.shopifyLinked||false,shopify_product_id:stockItem.shopifyProductId||null,shopify_variant_id:stockItem.shopifyVariantId||null,last_update:stockItem.lastUpdate};
+  if(stockItem._isNew){const r=await dbPost("stock",row);if(r&&r[0])stockItem.id=r[0].id;}
+  else await dbPatch("stock",{id:stockItem.id,...row});
+}
+async function saveSale(saleObj){
+  const row={invoice_num:saleObj.invoiceNum,global_seq:saleObj.globalSeq,client_id:saleObj.clientId||null,client_name:saleObj.client,product:saleObj.product,lines:saleObj._lines||[],qty:saleObj.qty,unit_ht:saleObj.unitHT,shipping:saleObj.shipping||0,total_ttc:saleObj.totalTTC,date:saleObj.date,source:saleObj.source||"manual",linked_stock_id:saleObj.linkedStockId||null};
+  if(saleObj._isNew){const r=await dbPost("sales",row);if(r&&r[0])saleObj.id=r[0].id;}
+  else await dbPatch("sales",{id:saleObj.id,...row});
+}
+async function savePurchase(pObj){
+  const row={supplier_id:pObj.supplierId||null,supplier_name:pObj.supplier,description:pObj.description,lines:pObj._lines||[],qty:pObj.qty,unit_ht:pObj.unitHT||0,amount_ht:pObj.amountHT,date:pObj.date,has_invoice:pObj.hasInvoice||false,invoice_file:pObj.invoiceFile||null,stock_status:pObj.stockStatus,linked_stock_id:pObj.linkedStockId||null};
+  if(pObj._isNew){const r=await dbPost("purchases",row);if(r&&r[0])pObj.id=r[0].id;}
+  else await dbPatch("purchases",{id:pObj.id,...row});
+}
+async function saveCharge(ch){
+  const row={name:ch.name,type:ch.type,category:ch.category,amount_ht:ch.amountHT,period:ch.period,note:ch.note,active:ch.active!==false};
+  if(ch._isNew){const r=await dbPost("charges",row);if(r&&r[0])ch.id=r[0].id;}
+  else await dbPatch("charges",{id:ch.id,...row});
+}
+async function saveTodo(t){
+  const row={title:t.title,description:t.description||null,assigned_to:t.assigned_to||null,created_by:t.created_by||null,due_date:t.due_date||null,priority:t.priority,status:t.status,is_global:t.is_global||false};
+  if(t._isNew){const r=await dbPost("todos",row);if(r&&r[0])t.id=r[0].id;}
+  else await dbPatch("todos",{id:t.id,...row});
+}
+async function saveSupplier(s){
+  const row={name:s.name,contact:s.contact||null,email:s.email||null,phone:s.phone||null};
+  if(s._isNew){const r=await dbPost("suppliers",row);if(r&&r[0])s.id=r[0].id;}
+  else await dbPatch("suppliers",{id:s.id,...row});
+}
+async function saveCompanyInfo(){
+  const ci=companyInfo;
+  await dbPatch("company_info",{id:1,name:ci.name,legal_form:ci.legalForm,address:ci.address,zip_city:ci.zipCity,siret:ci.siret,tva_intra:ci.tvaIntra,capital:ci.capital,rcs:ci.rcs,email:ci.email,phone:ci.phone,website:ci.website,iban:ci.iban,bic:ci.bic,bank:ci.bank,payment_terms:ci.paymentTerms,late_interest:ci.lateInterest,recovery_fee:ci.recoveryFee});
+}
+
+// ═══════════════════════════ INIT ════════════════════════════════════════════
+loadAllData();
+</script>
+</body>
+</html>
