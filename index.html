@@ -768,7 +768,7 @@ function removeStockFromPurchase(p){
   const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,qty:p.qty}];
   lines.forEach(l=>{
     if(!l.linkedStockId)return;
-    stock=stock.map(s=>s.id===l.linkedStockId?{...s,qty:Math.max(0,s.qty-l.qty),lastUpdate:new Date().toISOString().split("T")[0]}:s);
+    stock=stock.map(s=>String(s.id)===String(l.linkedStockId)?{...s,qty:Math.max(0,s.qty-l.qty),lastUpdate:new Date().toISOString().split("T")[0]}:s);
   });
 }
 function deletePurchase(id){
@@ -1024,7 +1024,7 @@ async function submitSendMail(id){
 
 // ═══════════════════════════ MODALS — VENTE ═══════════════════════════════════
 // ═══════════════════════════ MODALS — VENTE (multiproduits) ══════════════════
-function getStockOpts(){return stock.map(s=>`<option value="${s.id}" data-cost="${s.unitCostHT||0}" data-qty="${s.qty}" data-name="${s.name}">${s.name} (${s.qty} u.)</option>`).join("");}
+function getStockOpts(){return stock.map(s=>`<option value="${s.id}" data-cost="${s.unitCostHT||0}" data-qty="${s.qty}" data-name="${s.name}" data-id="${s.id}">${s.name} (${s.qty} u.)</option>`).join("");}
 
 function openAddSale(){
   const clientOpts=clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
@@ -1124,7 +1124,7 @@ function calcSaleTotal(){
 
 function submitSale(){
   const cid=document.getElementById("f-cid").value;
-  let clientObj=cid&&cid!=="__new__"?clients.find(c=>c.id===parseInt(cid)):null;
+  let clientObj=cid&&cid!=="__new__"?clients.find(c=>String(c.id)===String(cid)):null;
   let clientName="";
   if(cid==="__new__"){
     clientName=document.getElementById("f-cname").value.trim();
@@ -1145,12 +1145,12 @@ function submitSale(){
     if(prodSel.value==="__libre__") prodName=document.getElementById(`sl-t-${id}`)?.value||"Produit";
     else if(prodSel.value){
       prodName=prodSel.options[prodSel.selectedIndex]?.getAttribute("data-name")||"Produit";
-      linkedStockId=parseInt(prodSel.value);
+      linkedStockId=prodSel.value;
       // Stock check
-      const s=stock.find(x=>x.id===linkedStockId);
+      const s=stock.find(x=>String(x.id)===String(linkedStockId));
       if(s&&s.qty<qty&&!confirm(`⚠ Stock insuffisant pour "${prodName}" : ${s.qty} u. dispo, ${qty} vendues. Continuer ?`))return;
     }
-    lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId});
+    lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId:linkedStockId||null});
   }
   if(!lines.length){notify("⚠ Ajoutez au moins un produit");return;}
 
@@ -1176,8 +1176,8 @@ function submitSale(){
   // Deduct stock for each line
   lines.forEach(l=>{
     if(!l.linkedStockId)return;
-    const stockItem=stock.find(s=>s.id===l.linkedStockId);
-    stock=stock.map(s=>s.id===l.linkedStockId?{...s,qty:Math.max(0,s.qty-l.qty),lastUpdate:date}:s);
+    const stockItem=stock.find(s=>String(s.id)===String(l.linkedStockId));
+    stock=stock.map(s=>String(s.id)===String(l.linkedStockId)?{...s,qty:Math.max(0,s.qty-l.qty),lastUpdate:date}:s);
     if(stockItem?.shopifyVariantId) deductShopifyStock(stockItem, l.qty);
   });
 
@@ -1296,7 +1296,7 @@ function submitPurchase(){
     if(!supName){notify("⚠ Entrez le nom du fournisseur");return;}
     const ns={id:Date.now(),name:supName,contact:document.getElementById("p-sup-contact").value.trim(),email:document.getElementById("p-sup-email").value.trim(),phone:document.getElementById("p-sup-phone").value.trim()};
     suppliers=[...suppliers,ns];supplierId=ns.id;
-  }else if(supSel){const s=suppliers.find(x=>x.id===parseInt(supSel));supName=s?.name||"";supplierId=s?.id||null;}
+  }else if(supSel){const s=suppliers.find(x=>String(x.id)===String(supSel));supName=s?.name||"";supplierId=s?.id||null;}
   if(!supName){notify("⚠ Sélectionnez un fournisseur");return;}
 
   // Build purchase lines
@@ -1310,15 +1310,20 @@ function submitPurchase(){
     if(prodSel.value==="__new__"||prodSel.value==="__libre__"){
       prodName=document.getElementById(`pl-t-${id}`)?.value.trim()||"Produit";
       if(prodSel.value==="__new__"&&prodName){
-        const ns={id:Date.now()+Math.floor(Math.random()*10000),name:prodName,qty:0,reserved:0,unitCostHT:uht,shopifyLinked:false,lastUpdate:new Date().toISOString().split("T")[0]};
-        stock=[...stock,ns];linkedStockId=ns.id;
+        const tmpId="tmp-"+Date.now()+Math.floor(Math.random()*10000);
+        const ns={id:tmpId,name:prodName,qty:0,reserved:0,unitCostHT:uht,shopifyLinked:false,lastUpdate:new Date().toISOString().split("T")[0]};
+        stock=[...stock,ns];linkedStockId=tmpId;
+        // Save to DB and update id
+        dbPost("stock",{name:prodName,qty:0,reserved:0,unit_cost_ht:uht,shopify_linked:false,last_update:ns.lastUpdate}).then(r=>{
+          if(r&&r[0]){const realId=r[0].id;stock=stock.map(s=>s.id===tmpId?{...s,id:realId}:s);}
+        });
       }
     }else if(prodSel.value){
-      linkedStockId=parseInt(prodSel.value);
+      linkedStockId=prodSel.value;
       prodName=prodSel.options[prodSel.selectedIndex]?.text||"Produit";
-      stock=stock.map(s=>s.id===linkedStockId?{...s,unitCostHT:uht}:s);
+      stock=stock.map(s=>String(s.id)===String(linkedStockId)?{...s,unitCostHT:uht}:s);
     }
-    lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId});
+    lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId:linkedStockId||null});
   }
   if(!lines.length){notify("⚠ Ajoutez au moins un produit");return;}
 
@@ -1427,7 +1432,7 @@ function submitStock(id){
     const row={name,qty,reserved:0,unit_cost_ht:cost,shopify_linked:linked,last_update:today};
     dbPost("stock",row).then(r=>{
       const newId=r&&r[0]?r[0].id:("tmp-"+Date.now());
-      stock=[...stock.filter(s=>s.name!==name),{id:newId,name,qty,reserved:0,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today}];
+      stock=[...stock,{id:newId,name,qty,reserved:0,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today}];
       renderStock();
     });
   }
