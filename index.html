@@ -712,7 +712,7 @@ function renderAchats(){
     const cfg=STATUS[p.stockStatus]||STATUS.preparation;
     const linkedProd=p.linkedStockId?stock.find(s=>s.id===p.linkedStockId):null;
     return `<tr>
-      <td style="font-weight:700">${p.supplierId?`<span style="cursor:pointer;color:var(--navy)" onclick="openSupplierDetail(${p.supplierId})">${p.supplier} <span style="color:var(--orange);font-size:11px">↗</span></span>`:p.supplier}</td>
+      <td style="font-weight:700">${p.supplierId?`<span style="cursor:pointer;color:var(--navy)" onclick="openSupplierDetail('${p.supplierId}')">${p.supplier} <span style="color:var(--orange);font-size:11px">↗</span></span>`:p.supplier}</td>
       <td style="color:var(--muted)">${p.description}</td>
       <td>${p._lines&&p._lines.length>1
         ? p._lines.map(l=>l.linkedStockId?badge(l.qty+"x "+l.product,"bg"):`<span style='font-size:11px;color:var(--muted)'>${l.qty}x ${l.product}</span>`).join(" ")
@@ -1578,8 +1578,8 @@ function submitCreateInvoice(){
 
 // ═══════════════════════════ MODALS — FOURNISSEUR ═════════════════════════════
 function openSupplierDetail(id){
-  const s=suppliers.find(x=>x.id===id);if(!s)return;
-  const hist=purchases.filter(p=>p.supplierId===id);
+  const s=suppliers.find(x=>String(x.id)===String(id));if(!s)return;
+  const hist=purchases.filter(p=>String(p.supplierId)===String(id));
   const totalHT=hist.reduce((a,p)=>a+p.amountHT,0);
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
     <div class="modal-hdr"><div class="modal-title">🏭 ${s.name}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
@@ -1592,14 +1592,14 @@ function openSupplierDetail(id){
     <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:10px">Historique (${hist.length})</div>
     ${hist.length===0?`<p style="color:var(--light);font-size:13px">Aucun achat.</p>`:`<div class="tbl-wrap"><table><thead><tr><th>Description</th><th>Qté</th><th>Total HT</th><th>Date</th><th>Statut</th></tr></thead><tbody>${hist.map(p=>`<tr><td style="padding:9px 14px;color:var(--muted)">${p.description}</td><td style="padding:9px 14px;font-weight:600">${p.qty}</td><td style="padding:9px 14px;font-weight:700;color:var(--red)">-${fmtEur(p.amountHT)}</td><td style="padding:9px 14px;color:var(--muted)">${fmtDate(p.date)}</td><td style="padding:9px 14px"><span class="badge ${STATUS[p.stockStatus]?.bc||"bx"}">${STATUS[p.stockStatus]?.icon} ${STATUS[p.stockStatus]?.label}</span></td></tr>`).join("")}</tbody></table></div>`}
     <div style="display:flex;gap:10px;margin-top:16px">
-      <button class="btn btn-secondary" style="flex:1" onclick="openEditSupplier(${id})">✏️ Modifier</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteSupplier(${id})">Supprimer</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="openEditSupplier('${id}')">✏️ Modifier</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSupplier('${id}')">Supprimer</button>
       <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
     </div>
   </div></div>`);
 }
 function openEditSupplier(id){
-  const s=suppliers.find(x=>x.id===id);if(!s)return;
+  const s=suppliers.find(x=>String(x.id)===String(id));if(!s)return;
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">✏️ Modifier fournisseur</div><button class="modal-close" onclick="closeModal()">✕</button></div>
     <div class="field"><label>Nom</label><input class="input" id="es-name" value="${s.name}"/></div>
@@ -1610,11 +1610,11 @@ function openEditSupplier(id){
 }
 function submitEditSupplier(id){
   const name=document.getElementById("es-name").value.trim();if(!name){notify("⚠ Nom obligatoire");return;}
-  suppliers=suppliers.map(s=>s.id===id?{...s,name,email:document.getElementById("es-email").value.trim(),phone:document.getElementById("es-phone").value.trim(),contact:document.getElementById("es-contact").value.trim()}:s);
-  purchases=purchases.map(p=>p.supplierId===id?{...p,supplier:name}:p);
+  suppliers=suppliers.map(s=>String(s.id)===String(id)?{...s,name,email:document.getElementById("es-email").value.trim(),phone:document.getElementById("es-phone").value.trim(),contact:document.getElementById("es-contact").value.trim()}:s);
+  purchases=purchases.map(p=>String(p.supplierId)===String(id)?{...p,supplier:name}:p);
   closeModal();renderAchats();notify("✅ Fournisseur mis à jour");
 }
-function deleteSupplier(id){if(!confirm("Supprimer ce fournisseur ?"))return;suppliers=suppliers.filter(s=>s.id!==id);closeModal();renderAchats();notify("🗑 Fournisseur supprimé");}
+function deleteSupplier(id){if(!confirm("Supprimer ce fournisseur ?"))return;suppliers=suppliers.filter(s=>String(s.id)!==String(id));dbDelete("suppliers",id);closeModal();renderAchats();notify("🗑 Fournisseur supprimé");}
 
 // ═══════════════════════════ MODALS — ENTREPRISE & SHOPIFY ═══════════════════
 function openCompanySettings(){
