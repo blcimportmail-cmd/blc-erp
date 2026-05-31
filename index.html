@@ -792,12 +792,12 @@ function renderClients(search){
     <td style="color:var(--muted);font-size:12px">${c.email||"—"}</td>
     <td style="color:var(--muted);font-size:12px">${c.phone||"—"}</td>
     <td style="font-weight:700;color:var(--green)">${fmtEur(c.totalPurchases)}</td>
-    <td><div style="display:flex;gap:5px"><button class="btn btn-sm btn-secondary" onclick="openEditClient(${c.id})">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteClient(${c.id})">✕</button></div></td>
+    <td><div style="display:flex;gap:5px"><button class="btn btn-sm btn-secondary" onclick="openEditClient('${c.id}')">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteClient('${c.id}')">✕</button></div></td>
   </tr>`).join("");
 }
-function deleteClient(id){if(!confirm("Supprimer ce client ?"))return;clients=clients.filter(c=>c.id!==id);dbDelete("clients",id);renderClients("");}
+function deleteClient(id){if(!confirm("Supprimer ce client ?"))return;clients=clients.filter(c=>String(c.id)!==String(id));dbDelete("clients",id);renderClients("");}
 function openEditClient(id){
-  const c=clients.find(x=>x.id===id);if(!c)return;
+  const c=clients.find(x=>String(x.id)===String(id));if(!c)return;
   _openClientModal(c);
 }
 
@@ -1387,9 +1387,9 @@ async function submitClient(id){
   const name=document.getElementById("cl-name").value.trim();
   if(!name){notify("⚠ Nom obligatoire");return;}
   const data={name,address:document.getElementById("cl-addr").value.trim(),siret:document.getElementById("cl-siret").value.trim(),tvaIntra:document.getElementById("cl-tva").value.trim(),email:document.getElementById("cl-email").value.trim(),phone:document.getElementById("cl-phone").value.trim()};
-  if(id){
-    clients=clients.map(c=>c.id===id?{...c,...data}:c);
-    await dbPatch("clients",{id,...data,zip_city:"",tva_intra:data.tvaIntra,total_purchases:clients.find(c=>c.id===id)?.totalPurchases||0});
+  if(id&&id!=="null"){
+    clients=clients.map(c=>String(c.id)===String(id)?{...c,...data}:c);
+    await dbPatch("clients",{id,...data,zip_city:"",tva_intra:data.tvaIntra,total_purchases:clients.find(c=>String(c.id)===String(id))?.totalPurchases||0});
   } else {
     const row={name:data.name,address:data.address,zip_city:"",siret:data.siret,tva_intra:data.tvaIntra,email:data.email,phone:data.phone,total_purchases:0};
     const result=await dbPost("clients",row);
@@ -1880,19 +1880,25 @@ async function submitLogin(){
     errEl.style.display="block";errEl.textContent="❌ Identifiants incorrects";return;
   }
   currentUser=allUsers.find(u=>u.username===username);
+  sessionStorage.setItem("blc_user", JSON.stringify(currentUser));
+  showUserBar();
+  notify(`👋 Bonjour ${currentUser.display_name} !`);
+}
+
+function showUserBar(){
+  if(!currentUser)return;
   document.getElementById("login-overlay").style.display="none";
-  // Show user bar
   const bar=document.getElementById("user-bar");bar.style.display="block";
   const av=document.getElementById("user-avatar");
   av.textContent=currentUser.display_name[0].toUpperCase();
   av.style.background=currentUser.avatar_color;
   document.getElementById("user-name").textContent=currentUser.display_name;
   document.getElementById("user-role").textContent=currentUser.role;
-  notify(`👋 Bonjour ${currentUser.display_name} !`);
 }
 
 function logout(){
   currentUser=null;
+  sessionStorage.removeItem("blc_user");
   document.getElementById("login-overlay").style.display="flex";
   document.getElementById("user-bar").style.display="none";
   document.getElementById("login-user").value="";
@@ -2197,6 +2203,16 @@ async function saveCompanyInfo(){
 }
 
 // ═══════════════════════════ INIT ════════════════════════════════════════════
+// Restore session if exists
+(function(){
+  const saved = sessionStorage.getItem("blc_user");
+  if(saved){
+    try{
+      currentUser = JSON.parse(saved);
+      showUserBar();
+    }catch(e){sessionStorage.removeItem("blc_user");}
+  }
+})();
 loadAllData();
 </script>
 </body>
