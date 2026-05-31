@@ -724,25 +724,25 @@ function renderAchats(){
       <td style="color:var(--muted)">${fmtDate(p.date)}</td>
       <td>
         <div style="display:flex;flex-direction:column;gap:4px;min-width:130px">
-          <button onclick="changeStatus(${p.id},'preparation')" style="text-align:left;padding:4px 9px;border-radius:6px;font-size:10px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;border:1.5px solid;transition:all 0.13s;background:${p.stockStatus==='preparation'?'var(--yellow-pale)':'#f7f8fc'};color:${p.stockStatus==='preparation'?'var(--yellow)':'var(--light)'};border-color:${p.stockStatus==='preparation'?'#fde68a':'var(--border)'}">⏳ En préparation</button>
-          <button onclick="changeStatus(${p.id},'livraison')" style="text-align:left;padding:4px 9px;border-radius:6px;font-size:10px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;border:1.5px solid;transition:all 0.13s;background:${p.stockStatus==='livraison'?'var(--blue-pale)':'#f7f8fc'};color:${p.stockStatus==='livraison'?'var(--blue)':'var(--light)'};border-color:${p.stockStatus==='livraison'?'#bfdbfe':'var(--border)'}">🚚 En livraison</button>
-          <button onclick="changeStatus(${p.id},'local')" style="text-align:left;padding:4px 9px;border-radius:6px;font-size:10px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;border:1.5px solid;transition:all 0.13s;background:${p.stockStatus==='local'?'var(--green-pale)':'#f7f8fc'};color:${p.stockStatus==='local'?'var(--green)':'var(--light)'};border-color:${p.stockStatus==='local'?'#bbf7d0':'var(--border)'}">📦 Au local</button>
+          <button onclick="changeStatus('${p.id}','preparation')" style="text-align:left;padding:4px 9px;border-radius:6px;font-size:10px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;border:1.5px solid;transition:all 0.13s;background:${p.stockStatus==='preparation'?'var(--yellow-pale)':'#f7f8fc'};color:${p.stockStatus==='preparation'?'var(--yellow)':'var(--light)'};border-color:${p.stockStatus==='preparation'?'#fde68a':'var(--border)'}">⏳ En préparation</button>
+          <button onclick="changeStatus('${p.id}','livraison')" style="text-align:left;padding:4px 9px;border-radius:6px;font-size:10px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;border:1.5px solid;transition:all 0.13s;background:${p.stockStatus==='livraison'?'var(--blue-pale)':'#f7f8fc'};color:${p.stockStatus==='livraison'?'var(--blue)':'var(--light)'};border-color:${p.stockStatus==='livraison'?'#bfdbfe':'var(--border)'}">🚚 En livraison</button>
+          <button onclick="changeStatus('${p.id}','local')" style="text-align:left;padding:4px 9px;border-radius:6px;font-size:10px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;border:1.5px solid;transition:all 0.13s;background:${p.stockStatus==='local'?'var(--green-pale)':'#f7f8fc'};color:${p.stockStatus==='local'?'var(--green)':'var(--light)'};border-color:${p.stockStatus==='local'?'#bbf7d0':'var(--border)'}">📦 Au local</button>
         </div>
       </td>
       <td>${p.hasInvoice?badge("📎 "+p.invoiceFile,"bg"):badge("Manquante","br")}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="deletePurchase(${p.id})">✕</button></td>
+      <td><button class="btn btn-sm btn-danger" onclick="deletePurchase('${p.id}')">✕</button></td>
     </tr>`;
   }).join("");
 }
 
 function toggleSortAchats(){sortAchats=sortAchats==="date_desc"?"date_asc":"date_desc";renderAchats();}
 function changeStatus(id,newStatus){
-  const prev=purchases.find(p=>p.id===id);if(!prev)return;
+  const prev=purchases.find(p=>String(p.id)===String(id));if(!prev)return;
   if(prev.stockStatus===newStatus)return; // no change
   const wasLocal=prev.stockStatus==="local",becomesLocal=newStatus==="local";
   if(!wasLocal&&becomesLocal)addStockFromPurchase(prev);
   else if(wasLocal&&!becomesLocal)removeStockFromPurchase(prev);
-  purchases=purchases.map(p=>p.id===id?{...p,stockStatus:newStatus}:p);
+  purchases=purchases.map(p=>String(p.id)===String(id)?{...p,stockStatus:newStatus}:p);
   renderAchats();
   notify(`✅ ${STATUS[newStatus]?.icon} ${STATUS[newStatus]?.label}`);
   const updatedP=purchases.find(p=>p.id===id);
@@ -773,9 +773,9 @@ function removeStockFromPurchase(p){
 }
 function deletePurchase(id){
   if(!confirm("Supprimer cet achat ?"))return;
-  const p=purchases.find(x=>x.id===id);
+  const p=purchases.find(x=>String(x.id)===String(id));
   if(p)removeStockFromPurchase(p);
-  purchases=purchases.filter(x=>x.id!==id);
+  purchases=purchases.filter(x=>String(x.id)!==String(id));
   renderAchats();notify("🗑 Achat supprimé");
   dbDelete("purchases",id);
 }
@@ -813,7 +813,7 @@ function renderStock(){
     <td style="font-weight:700">${fmtEur((s.unitCostHT||0)*s.qty)}</td>
     <td>${badge(s.shopifyLinked?"Lié":"Manuel",s.shopifyLinked?"bg":"bx")}</td>
     <td style="color:var(--muted);font-size:12px">${fmtDate(s.lastUpdate)}</td>
-    <td><button class="btn btn-sm btn-secondary" onclick="openAddStock(${s.id})">Modifier</button></td>
+    <td><button class="btn btn-sm btn-secondary" onclick="openAddStock('${s.id}')">Modifier</button></td>
   </tr>`).join("");
 }
 
@@ -838,7 +838,7 @@ function renderCharges(){
     <td style="color:var(--muted);font-size:12px">${ch.category||"—"}</td>
     <td style="color:var(--muted);font-size:12px;font-style:italic">${ch.note||""}</td>
     <td><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;color:${ch.active!==false?"var(--green)":"var(--light)"}"><input type="checkbox" ${ch.active!==false?"checked":""} onchange="toggleCharge(${ch.id},this.checked)" style="accent-color:var(--green);width:14px;height:14px"/>${ch.active!==false?"Actif":"Inactif"}</label></td>
-    <td><div style="display:flex;gap:5px"><button class="btn btn-sm btn-secondary" onclick="openAddCharge(${ch.id})">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteCharge(${ch.id})">✕</button></div></td>
+    <td><div style="display:flex;gap:5px"><button class="btn btn-sm btn-secondary" onclick="openAddCharge('${ch.id}')">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteCharge('${ch.id}')">✕</button></div></td>
   </tr>`).join("");
 }
 function toggleCharge(id,active){charges=charges.map(ch=>ch.id===id?{...ch,active}:ch);renderCharges();}
@@ -858,21 +858,21 @@ function renderFactures(){
     <td style="color:var(--muted)">${fmtDate(inv.date)}</td>
     <td>${badge(inv.type==="shopify"?"Shopify":"Manuel",inv.type==="shopify"?"bg":"bo")}</td>
     <td><div style="display:flex;gap:6px">
-      ${inv.type==="manual"?`<button class="btn btn-sm btn-ghost" onclick="dlInvoice(${inv.id})" title="Télécharger">↓</button>`:""}
-      ${inv.type==="manual"?`<button class="btn btn-sm btn-secondary" onclick="sendInvoiceByMail(${inv.id})" title="Envoyer par mail">✉</button>`:""}
-      ${inv.type==="manual"?`<button class="btn btn-sm btn-danger" onclick="deleteInvoice(${inv.id})" title="Supprimer">✕</button>`:`<span style="font-size:11px;color:var(--light)">Shopify</span>`}
+      ${inv.type==="manual"?`<button class="btn btn-sm btn-ghost" onclick="dlInvoice('${inv.id}')" title="Télécharger">↓</button>`:""}
+      ${inv.type==="manual"?`<button class="btn btn-sm btn-secondary" onclick="sendInvoiceByMail('${inv.id}')" title="Envoyer par mail">✉</button>`:""}
+      ${inv.type==="manual"?`<button class="btn btn-sm btn-danger" onclick="deleteInvoice('${inv.id}')" title="Supprimer">✕</button>`:`<span style="font-size:11px;color:var(--light)">Shopify</span>`}
     </div></td>
   </tr>`).join("");
 }
 function deleteInvoice(id){
   if(!confirm("Supprimer cette facture ? Les numéros seront recalculés."))return;
-  const s=sales.find(x=>x.id===id);
+  const s=sales.find(x=>String(x.id)===String(id));
   if(s){
     if(s.linkedStockId)stock=stock.map(st=>st.id===s.linkedStockId?{...st,qty:st.qty+(s.qty||0)}:st);
     else{const m=stock.find(st=>s.product.toLowerCase().includes(st.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m)stock=stock.map(st=>st.id===m.id?{...st,qty:st.qty+(s.qty||0)}:st);}
     if(s.clientId)clients=clients.map(c=>c.id===s.clientId?{...c,totalPurchases:Math.max(0,(c.totalPurchases||0)-s.totalTTC)}:c);
   }
-  sales=sales.filter(x=>x.id!==id);
+  sales=sales.filter(x=>String(x.id)!==String(id));
   renderFactures();notify("🗑 Facture supprimée · stock et CA ajustés");
   dbDelete("sales",id);
 }
@@ -998,8 +998,8 @@ async function dlInvoice(id) {
 }
 
 function sendInvoiceByMail(id){
-  const s=sales.find(x=>x.id===id);if(!s)return;
-  const clientObj=clients.find(c=>c.id===s.clientId);
+  const s=sales.find(x=>String(x.id)===String(id));if(!s)return;
+  const clientObj=clients.find(c=>String(c.id)===String(s.clientId));
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">✉ Envoyer la facture</div><button class="modal-close" onclick="closeModal()">✕</button></div>
     <div class="sub-box" style="font-size:13px"><b style="color:var(--orange)">${s.invoiceNum}</b> · ${s.client} · <b>${fmtEur(s.totalTTC)}</b></div>
@@ -1407,7 +1407,7 @@ async function submitClient(id){
 
 // ═══════════════════════════ MODALS — STOCK ═══════════════════════════════════
 function openAddStock(id){
-  const s=id?stock.find(x=>x.id===id):null;
+  const s=id&&id!=='null'?stock.find(x=>String(x.id)===String(id)):null;
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">${s?"Modifier le stock":"Nouveau produit"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
     <div class="field"><label>Nom du produit</label><input class="input" id="sk-name" value="${s?.name||""}" placeholder="Ex: Salopette Dickies"/></div>
@@ -1425,8 +1425,8 @@ function submitStock(id){
   const cost=parseFloat(document.getElementById("sk-cost").value)||0;
   const linked=document.getElementById("sk-linked").checked;
   const today=new Date().toISOString().split("T")[0];
-  if(id){
-    stock=stock.map(s=>s.id===id?{...s,name,qty,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today}:s);
+  if(id&&id!=='null'){
+    stock=stock.map(s=>String(s.id)===String(id)?{...s,name,qty,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today}:s);
     dbPatch("stock",{id,name,qty,reserved:0,unit_cost_ht:cost,shopify_linked:linked,last_update:today});
   } else {
     const row={name,qty,reserved:0,unit_cost_ht:cost,shopify_linked:linked,last_update:today};
@@ -1441,7 +1441,7 @@ function submitStock(id){
 
 // ═══════════════════════════ MODALS — CHARGE ══════════════════════════════════
 function openAddCharge(id){
-  const ch=id?charges.find(x=>x.id===id):null;
+  const ch=id&&id!=='null'?charges.find(x=>String(x.id)===String(id)):null;
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">${ch?"Modifier la charge":"Nouvelle charge"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
     <div class="field"><label>Nom *</label><input class="input" id="ch-name" value="${ch?.name||""}" placeholder="Ex: Loyer, Cartons, Abonnement logiciel…"/></div>
@@ -2086,7 +2086,7 @@ function submitTodo(id){
 
 function deleteTodo(id){
   if(!confirm("Supprimer cette tâche ?"))return;
-  todos=todos.filter(t=>t.id!==id);
+  todos=todos.filter(t=>String(t.id)!==String(id));
   closeModal();renderTodo();notify("🗑 Tâche supprimée");
   dbDelete("todos",id);
 }
