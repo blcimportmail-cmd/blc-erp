@@ -283,7 +283,15 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
   <div class="page" id="page-stock">
     <div class="page-hdr">
       <div><div class="page-title">Stock</div><div class="page-sub" id="stock-sub">—</div></div>
-      <button class="btn btn-primary" onclick="openAddStock(null)">+ Ajouter produit</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-sm" id="sf-local"       onclick="setStockFilter('local')"       style="background:var(--green-pale);color:var(--green);border:1.5px solid #bbf7d0;font-weight:700">📦 Au local</button>
+          <button class="btn btn-sm btn-secondary" id="sf-livraison"   onclick="setStockFilter('livraison')"   >🚚 En livraison</button>
+          <button class="btn btn-sm btn-secondary" id="sf-preparation" onclick="setStockFilter('preparation')" >⏳ En préparation</button>
+          <button class="btn btn-sm btn-secondary" id="sf-all"         onclick="setStockFilter('all')"         >Tout</button>
+        </div>
+        <button class="btn btn-primary" onclick="openAddStock(null)">+ Ajouter produit</button>
+      </div>
     </div>
     <div class="tbl-wrap">
       <table><thead><tr><th>Produit</th><th>Stock dispo</th><th>Réservé</th><th>Coût unit. HT</th><th>Valeur HT</th><th>Shopify</th><th>MAJ</th><th>Action</th></tr></thead>
@@ -360,6 +368,7 @@ let allUsers = [
   {id:"u4",username:"thibault",display_name:"Thibault", role:"collaborateur", avatar_color:"#8b5cf6"},
 ];
 let todoFilter = "all"; // all | mine | global
+let stockFilter = "local"; // local | livraison | preparation | all
 
 // ═══════════════════════════ STATE ═══════════════════════════════════════════
 let globalInvCounter = 0;
@@ -830,17 +839,75 @@ function openEditClient(id){
 }
 
 // ═══════════════════════════ STOCK ═══════════════════════════════════════════
+function setStockFilter(f){
+  stockFilter=f;
+  // Reset all buttons
+  ["local","livraison","preparation","all"].forEach(k=>{
+    const btn=document.getElementById("sf-"+k);
+    if(!btn)return;
+    btn.className="btn btn-sm btn-secondary";
+    btn.style.background="";btn.style.color="";btn.style.border="";btn.style.fontWeight="";
+  });
+  // Highlight active
+  const colors={local:"var(--green-pale)","local-color":"var(--green)","local-border":"#bbf7d0",
+                 livraison:"var(--blue-pale)","livraison-color":"var(--blue)","livraison-border":"#bfdbfe",
+                 preparation:"var(--yellow-pale)","preparation-color":"var(--yellow)","preparation-border":"#fde68a",
+                 all:"var(--orange-pale)","all-color":"var(--orange)","all-border":"var(--orange)"};
+  const btn=document.getElementById("sf-"+f);
+  if(btn){
+    btn.className="btn btn-sm";
+    if(f==="local"){btn.style.background="var(--green-pale)";btn.style.color="var(--green)";btn.style.border="1.5px solid #bbf7d0";}
+    else if(f==="livraison"){btn.style.background="var(--blue-pale)";btn.style.color="var(--blue)";btn.style.border="1.5px solid #bfdbfe";}
+    else if(f==="preparation"){btn.style.background="var(--yellow-pale)";btn.style.color="var(--yellow)";btn.style.border="1.5px solid #fde68a";}
+    else{btn.style.background="var(--orange-pale)";btn.style.color="var(--orange)";btn.style.border="1.5px solid var(--orange)";}
+    btn.style.fontWeight="700";
+  }
+  renderStock();
+}
+
 async function reloadStock(){
   const data = await dbGet("stock","order=name");
   if(Array.isArray(data)) stock=data.map(rowToStock);
   renderStock();
 }
+function getStockWithStatus(){
+  // For each stock item, find its purchases to get status
+  return stock.map(s=>{
+    // Find most recent "local" purchase for this stock
+    const localPurchases=purchases.filter(p=>p._lines?.some(l=>String(l.linkedStockId)===String(s.id))&&p.stockStatus==="local");
+    const livPurchases=purchases.filter(p=>p._lines?.some(l=>String(l.linkedStockId)===String(s.id))&&p.stockStatus==="livraison");
+    const prepPurchases=purchases.filter(p=>p._lines?.some(l=>String(l.linkedStockId)===String(s.id))&&p.stockStatus==="preparation");
+    // Compute qty by status
+    const qtyLocal=localPurchases.reduce((t,p)=>t+(p._lines?.filter(l=>String(l.linkedStockId)===String(s.id)).reduce((a,l)=>a+l.qty,0)||0),0);
+    const qtyLiv=livPurchases.reduce((t,p)=>t+(p._lines?.filter(l=>String(l.linkedStockId)===String(s.id)).reduce((a,l)=>a+l.qty,0)||0),0);
+    const qtyPrep=prepPurchases.reduce((t,p)=>t+(p._lines?.filter(l=>String(l.linkedStockId)===String(s.id)).reduce((a,l)=>a+l.qty,0)||0),0);
+    return {...s,qtyLocal,qtyLiv,qtyPrep};
+  });
+}
+
 function renderStock(){
-  const total=stock.reduce((s,i)=>s+(i.unitCostHT||0)*i.qty,0);
-  document.getElementById("stock-sub").textContent=`Valeur totale : ${fmtEur(total)} HT`;
-  document.getElementById("stock-body").innerHTML=stock.length===0?`<tr><td colspan="8" class="empty-state">Aucun produit</td></tr>`:stock.map(s=>`<tr>
+  const withStatus=getStockWithStatus();
+
+  // Filter based on stockFilter
+  let filtered=withStatus;
+  if(stockFilter==="local")       filtered=withStatus.filter(s=>s.qty>0||s.qtyLocal>0);
+  else if(stockFilter==="livraison")   filtered=withStatus.filter(s=>s.qtyLiv>0);
+  else if(stockFilter==="preparation") filtered=withStatus.filter(s=>s.qtyPrep>0);
+
+  const total=filtered.reduce((s,i)=>s+(i.unitCostHT||0)*i.qty,0);
+  const filterLabel=stockFilter==="local"?"Au local":stockFilter==="livraison"?"En livraison":stockFilter==="preparation"?"En préparation":"Tous les produits";
+  document.getElementById("stock-sub").textContent=`${filterLabel} · ${filtered.length} produit${filtered.length>1?"s":""} · Valeur : ${fmtEur(total)} HT`;
+
+  document.getElementById("stock-body").innerHTML=filtered.length===0
+    ?`<tr><td colspan="8" class="empty-state">Aucun produit ${stockFilter!=="all"?"en statut «"+filterLabel+"»":""}</td></tr>`
+    :filtered.map(s=>`<tr>
     <td style="font-weight:600">${s.name}</td>
-    <td><span style="font-weight:800;font-size:15px;color:${stockColor(s.qty)}">${s.qty}</span> <span style="color:var(--light);font-size:11px">u.</span></td>
+    <td>
+      <span style="font-weight:800;font-size:15px;color:${stockColor(s.qty)}">${s.qty}</span>
+      <span style="color:var(--light);font-size:11px"> u. local</span>
+      ${s.qtyLiv>0?`<br/><span style="font-size:11px;color:var(--blue)">🚚 ${s.qtyLiv} en livraison</span>`:""}
+      ${s.qtyPrep>0?`<br/><span style="font-size:11px;color:var(--yellow)">⏳ ${s.qtyPrep} en préparation</span>`:""}
+    </td>
     <td style="color:var(--muted)">${s.reserved}</td>
     <td style="color:var(--muted)">${fmtEur(s.unitCostHT||0)}</td>
     <td style="font-weight:700">${fmtEur((s.unitCostHT||0)*s.qty)}</td>
