@@ -136,6 +136,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
     <button class="nav-item" onclick="goTo('clients')"><span>👥</span>Clients</button>
     <button class="nav-item" onclick="goTo('factures')"><span>🧾</span>Factures</button>
     <button class="nav-item" onclick="goTo('todo')"><span>✅</span>To-do</button>
+    <button class="nav-item" onclick="goTo('rdv')"><span>📅</span>Rendez-vous</button>
   </nav>
   <div id="user-bar" style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.07);display:none">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -325,6 +326,32 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
   </div>
 
 
+  <!-- RENDEZ-VOUS -->
+  <div class="page" id="page-rdv">
+    <div class="page-hdr">
+      <div><div class="page-title">Rendez-vous</div><div class="page-sub" id="rdv-sub">—</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-sm btn-secondary" id="rdv-f-day"   onclick="setRdvFilter('day')">Aujourd'hui</button>
+          <button class="btn btn-sm" id="rdv-f-week"  onclick="setRdvFilter('week')" style="background:var(--orange-pale);color:var(--orange);border:1.5px solid var(--orange);font-weight:700">Cette semaine</button>
+          <button class="btn btn-sm btn-secondary" id="rdv-f-month" onclick="setRdvFilter('month')">Ce mois</button>
+          <button class="btn btn-sm btn-secondary" id="rdv-f-all"   onclick="setRdvFilter('all')">Tout</button>
+        </div>
+        <button class="btn btn-primary" onclick="openAddRdv(null)">+ Nouveau RDV</button>
+        <button class="btn btn-secondary" onclick="openCalendarSync()">🔗 Sync calendrier</button>
+      </div>
+    </div>
+    <!-- période affichée -->
+    <div id="rdv-period-label" style="font-size:12px;color:var(--muted);margin-bottom:16px;font-weight:600"></div>
+    <!-- timeline -->
+    <div id="rdv-list" class="tbl-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Heure</th><th>Durée</th><th>Client / Objet</th><th>Notes</th><th>Source</th><th>Action</th></tr></thead>
+        <tbody id="rdv-body"><tr><td colspan="7" class="empty-state">Aucun rendez-vous</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- TODO -->
   <div class="page" id="page-todo">
     <div class="page-hdr">
@@ -369,6 +396,8 @@ let allUsers = [
 ];
 let todoFilter = "all"; // all | mine | global
 let stockFilter = "local"; // local | livraison | preparation | all
+let rdvFilter = "week"; // day | week | month | all
+let rdvList = []; // [{id,title,date,time,endTime,client,notes,source}]
 
 // ═══════════════════════════ STATE ═══════════════════════════════════════════
 let globalInvCounter = 0;
@@ -421,7 +450,7 @@ function goTo(id){
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.remove("active"));
   document.getElementById("page-"+id).classList.add("active");
   document.querySelector(`.nav-item[onclick="goTo('${id}')"]`).classList.add("active");
-  ({dashboard:renderDashboard,ventes:renderVentes,achats:renderAchats,clients:()=>renderClients(""),stock:renderStock,charges:renderCharges,factures:renderFactures,todo:renderTodo}[id]||renderDashboard)();
+  ({dashboard:renderDashboard,ventes:renderVentes,achats:renderAchats,clients:()=>renderClients(""),stock:renderStock,charges:renderCharges,factures:renderFactures,todo:renderTodo,rdv:renderRdv}[id]||renderDashboard)();
 }
 
 // ═══════════════════════════ BÉNÉFICE PAR PRODUIT ════════════════════════════
@@ -2445,6 +2474,200 @@ async function saveSupplier(s){
 async function saveCompanyInfo(){
   const ci=companyInfo;
   await dbPatch("company_info",{id:1,name:ci.name,legal_form:ci.legalForm,address:ci.address,zip_city:ci.zipCity,siret:ci.siret,tva_intra:ci.tvaIntra,capital:ci.capital,rcs:ci.rcs,email:ci.email,phone:ci.phone,website:ci.website,iban:ci.iban,bic:ci.bic,bank:ci.bank,payment_terms:ci.paymentTerms,late_interest:ci.lateInterest,recovery_fee:ci.recoveryFee});
+}
+
+// ═══════════════════════════ RENDEZ-VOUS ════════════════════════════════════
+function setRdvFilter(f){
+  rdvFilter=f;
+  ["day","week","month","all"].forEach(k=>{
+    const b=document.getElementById("rdv-f-"+k);if(!b)return;
+    b.className="btn btn-sm btn-secondary";
+    b.style.background="";b.style.color="";b.style.border="";b.style.fontWeight="";
+  });
+  const b=document.getElementById("rdv-f-"+f);
+  if(b){b.className="btn btn-sm";b.style.background="var(--orange-pale)";b.style.color="var(--orange)";b.style.border="1.5px solid var(--orange)";b.style.fontWeight="700";}
+  renderRdv();
+}
+
+function getRdvFiltered(){
+  const now=new Date(),today=isoDate(now);
+  let from="",to="";
+  if(rdvFilter==="day"){from=today;to=today;}
+  else if(rdvFilter==="week"){
+    const d=new Date(now);const day=d.getDay()||7;d.setDate(d.getDate()-day+1);
+    from=isoDate(d);
+    const d2=new Date(d);d2.setDate(d2.getDate()+6);to=isoDate(d2);
+  }
+  else if(rdvFilter==="month"){
+    from=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`;
+    const lastDay=new Date(now.getFullYear(),now.getMonth()+1,0);to=isoDate(lastDay);
+  }
+  let filtered=rdvList;
+  if(from)filtered=filtered.filter(r=>r.date>=from);
+  if(to)filtered=filtered.filter(r=>r.date<=to);
+  return {filtered,from,to};
+}
+
+function renderRdv(){
+  const {filtered,from,to}=getRdvFiltered();
+  const label=rdvFilter==="day"?"Aujourd'hui":rdvFilter==="week"?`Semaine du ${fmtDate(from)} au ${fmtDate(to)}`:rdvFilter==="month"?`${new Date(from).toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}`:filtered.length+" rendez-vous au total";
+  const lbl=document.getElementById("rdv-period-label");if(lbl)lbl.textContent=label;
+  document.getElementById("rdv-sub").textContent=`${filtered.length} rendez-vous`;
+  const sorted=[...filtered].sort((a,b)=>a.date===b.date?(a.time||"").localeCompare(b.time||""):a.date.localeCompare(b.date));
+  const now=new Date();
+  document.getElementById("rdv-body").innerHTML=sorted.length===0
+    ?`<tr><td colspan="7" class="empty-state">Aucun rendez-vous sur cette période</td></tr>`
+    :sorted.map(r=>{
+      const rdvDt=new Date(`${r.date}T${r.time||"00:00"}`);
+      const isPast=rdvDt<now;
+      const isToday=r.date===isoDate(now);
+      const rowStyle=isToday?"background:#fffbf5":"";
+      const clientObj=clients.find(c=>String(c.id)===String(r.clientId));
+      return `<tr style="${rowStyle}${isPast?";opacity:0.6":""}">
+        <td>
+          <div style="font-weight:700;color:${isToday?"var(--orange)":"var(--navy)"}">${fmtDate(r.date)}</div>
+          ${isToday?`<span style="font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1px">Aujourd'hui</span>`:""}
+        </td>
+        <td style="font-weight:600;font-size:14px">${r.time||"—"}${r.endTime?`<span style="color:var(--muted);font-size:11px"> → ${r.endTime}</span>`:""}</td>
+        <td style="color:var(--muted);font-size:12px">${r.time&&r.endTime?calcDuration(r.time,r.endTime):"—"}</td>
+        <td>
+          <div style="font-weight:700">${r.title}</div>
+          ${clientObj?`<div style="font-size:11px;color:var(--orange);margin-top:2px">👤 ${clientObj.name}</div>`:r.clientName?`<div style="font-size:11px;color:var(--muted);margin-top:2px">👤 ${r.clientName}</div>`:""}
+        </td>
+        <td style="color:var(--muted);font-size:12px;max-width:200px">${r.notes||"—"}</td>
+        <td>${r.source==="google"?`<span class="badge bb">Google</span>`:r.source==="calendly"?`<span class="badge bg">Calendly</span>`:`<span class="badge bx">Manuel</span>`}</td>
+        <td><div style="display:flex;gap:5px">
+          <button class="btn btn-sm btn-secondary" onclick="openAddRdv('${r.id}')">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteRdv('${r.id}')">✕</button>
+        </div></td>
+      </tr>`;
+    }).join("");
+}
+
+function calcDuration(start,end){
+  const [sh,sm]=start.split(":").map(Number);
+  const [eh,em]=end.split(":").map(Number);
+  const mins=(eh*60+em)-(sh*60+sm);
+  if(mins<=0)return"—";
+  return mins>=60?`${Math.floor(mins/60)}h${mins%60?String(mins%60).padStart(2,"0"):""}`:mins+"min";
+}
+
+function openAddRdv(id){
+  const r=id&&id!=="null"?rdvList.find(x=>String(x.id)===String(id)):null;
+  const clientOpts=clients.map(c=>`<option value="${c.id}" ${r?.clientId===c.id?"selected":""}>${c.name}</option>`).join("");
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">${r?"✏️ Modifier":"📅 Nouveau rendez-vous"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <input type="hidden" id="rdv-id" value="${r?.id||""}"/>
+    <div class="field"><label>Objet / Titre *</label><input class="input" id="rdv-title" value="${r?.title||""}" placeholder="Ex: Présentation lot pulls"/></div>
+    <div class="row2">
+      <div class="field"><label>Date *</label><input class="input" type="date" id="rdv-date" value="${r?.date||isoDate(new Date())}"/></div>
+      <div class="field"><label>Client</label>
+        <select class="input" id="rdv-client">
+          <option value="">— Aucun client lié —</option>${clientOpts}
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Heure début</label><input class="input" type="time" id="rdv-time" value="${r?.time||"09:00"}"/></div>
+      <div class="field"><label>Heure fin</label><input class="input" type="time" id="rdv-endtime" value="${r?.endTime||"10:00"}"/></div>
+    </div>
+    <div class="field"><label>Notes</label><textarea class="input" id="rdv-notes" rows="2" style="resize:vertical" placeholder="Détails, adresse, lien visio…">${r?.notes||""}</textarea></div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitRdv()">Enregistrer</button>
+  </div></div>`);
+}
+
+async function submitRdv(){
+  const id=document.getElementById("rdv-id")?.value||"";
+  const title=document.getElementById("rdv-title").value.trim();
+  if(!title){notify("⚠ Titre obligatoire");return;}
+  const clientId=document.getElementById("rdv-client").value||null;
+  const clientObj=clientId?clients.find(c=>String(c.id)===String(clientId)):null;
+  const r={
+    id:id||("rdv-"+Date.now()),
+    title,
+    date:document.getElementById("rdv-date").value,
+    time:document.getElementById("rdv-time").value||null,
+    endTime:document.getElementById("rdv-endtime").value||null,
+    clientId:clientId||null,
+    clientName:clientObj?.name||"",
+    notes:document.getElementById("rdv-notes").value.trim(),
+    source:"manual",
+  };
+  if(id&&id!=="null"){
+    rdvList=rdvList.map(x=>String(x.id)===String(id)?{...x,...r}:x);
+    dbPatch("todos",{id}); // placeholder — will use rdv table when created
+  } else {
+    rdvList=[r,...rdvList];
+  }
+  closeModal();renderRdv();
+  notify(`📅 RDV "${title}" ${id?"mis à jour":"créé"}`);
+}
+
+function deleteRdv(id){
+  if(!confirm("Supprimer ce rendez-vous ?"))return;
+  rdvList=rdvList.filter(x=>String(x.id)!==String(id));
+  renderRdv();notify("🗑 RDV supprimé");
+}
+
+function openCalendarSync(){
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">🔗 Synchronisation Calendrier</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="background:var(--blue-pale);border-radius:10px;padding:16px;border:1.5px solid #bfdbfe">
+        <div style="font-weight:700;color:var(--blue);margin-bottom:6px">📅 Google Calendar</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Synchronise automatiquement tes événements Google Calendar.</div>
+        <button class="btn btn-secondary" style="width:100%" onclick="notify('🔜 Connexion Google Calendar — bientôt disponible')">Connecter Google Calendar</button>
+      </div>
+      <div style="background:var(--green-pale);border-radius:10px;padding:16px;border:1.5px solid #bbf7d0">
+        <div style="font-weight:700;color:var(--green);margin-bottom:6px">🟢 Calendly</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Importe tes rendez-vous Calendly automatiquement.</div>
+        <button class="btn btn-secondary" style="width:100%" onclick="notify('🔜 Connexion Calendly — bientôt disponible')">Connecter Calendly</button>
+      </div>
+      <div style="background:#f7f8fc;border-radius:10px;padding:16px;border:1.5px solid var(--border)">
+        <div style="font-weight:700;color:var(--navy);margin-bottom:6px">📥 Import manuel (.ics)</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Exporte ton calendrier en .ics et importe-le ici.</div>
+        <input type="file" accept=".ics" onchange="importICS(this)" style="font-size:12px;color:var(--muted)"/>
+      </div>
+    </div>
+    <button class="btn btn-secondary" style="width:100%;margin-top:14px" onclick="closeModal()">Fermer</button>
+  </div></div>`);
+}
+
+function importICS(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    const events=parseICS(text);
+    rdvList=[...rdvList,...events];
+    closeModal();renderRdv();
+    notify(`✅ ${events.length} rendez-vous importés depuis le fichier .ics`);
+  };
+  reader.readAsText(file);
+}
+
+function parseICS(text){
+  const events=[];let current=null;
+  text.split(/\r?\n/).forEach(line=>{
+    if(line.startsWith("BEGIN:VEVENT")){current={};}
+    else if(line.startsWith("END:VEVENT")&&current){
+      if(current.date&&current.title){events.push({id:"ics-"+Date.now()+Math.random(),source:"google",...current});}
+      current=null;
+    } else if(current){
+      if(line.startsWith("SUMMARY:")){current.title=line.replace("SUMMARY:","").trim();}
+      else if(line.startsWith("DTSTART")){
+        const val=line.split(":").pop().trim();
+        if(val.length>=8){current.date=`${val.slice(0,4)}-${val.slice(4,6)}-${val.slice(6,8)}`;if(val.length>=15)current.time=`${val.slice(9,11)}:${val.slice(11,13)}`;}
+      }
+      else if(line.startsWith("DTEND")){
+        const val=line.split(":").pop().trim();
+        if(val.length>=15)current.endTime=`${val.slice(9,11)}:${val.slice(11,13)}`;
+      }
+      else if(line.startsWith("DESCRIPTION:")){current.notes=line.replace("DESCRIPTION:","").trim();}
+      else if(line.startsWith("LOCATION:")){current.notes=(current.notes?current.notes+" | ":"")+line.replace("LOCATION:","").trim();}
+    }
+  });
+  return events;
 }
 
 // ═══════════════════════════ MODAL WRAPPERS ══════════════════════════════════
