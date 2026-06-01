@@ -871,17 +871,29 @@ async function reloadStock(){
   renderStock();
 }
 function getStockWithStatus(){
-  // For each stock item, find its purchases to get status
   return stock.map(s=>{
-    // Find most recent "local" purchase for this stock
-    const localPurchases=purchases.filter(p=>p._lines?.some(l=>String(l.linkedStockId)===String(s.id))&&p.stockStatus==="local");
-    const livPurchases=purchases.filter(p=>p._lines?.some(l=>String(l.linkedStockId)===String(s.id))&&p.stockStatus==="livraison");
-    const prepPurchases=purchases.filter(p=>p._lines?.some(l=>String(l.linkedStockId)===String(s.id))&&p.stockStatus==="preparation");
-    // Compute qty by status
-    const qtyLocal=localPurchases.reduce((t,p)=>t+(p._lines?.filter(l=>String(l.linkedStockId)===String(s.id)).reduce((a,l)=>a+l.qty,0)||0),0);
-    const qtyLiv=livPurchases.reduce((t,p)=>t+(p._lines?.filter(l=>String(l.linkedStockId)===String(s.id)).reduce((a,l)=>a+l.qty,0)||0),0);
-    const qtyPrep=prepPurchases.reduce((t,p)=>t+(p._lines?.filter(l=>String(l.linkedStockId)===String(s.id)).reduce((a,l)=>a+l.qty,0)||0),0);
-    return {...s,qtyLocal,qtyLiv,qtyPrep};
+    const sid=String(s.id);
+    // Get lines per status
+    const getLinesForStatus=(status)=>purchases
+      .filter(p=>p.stockStatus===status)
+      .flatMap(p=>(p._lines||[]).filter(l=>String(l.linkedStockId)===sid));
+
+    const localLines=getLinesForStatus("local");
+    const livLines=getLinesForStatus("livraison");
+    const prepLines=getLinesForStatus("preparation");
+
+    const qtyLiv  =livLines.reduce((t,l)=>t+l.qty,0);
+    const qtyPrep =prepLines.reduce((t,l)=>t+l.qty,0);
+
+    // PMP for livraison lines
+    const totalValLiv=livLines.reduce((t,l)=>t+l.qty*(l.unitHT||0),0);
+    const costLiv=qtyLiv>0?totalValLiv/qtyLiv:0;
+
+    // PMP for preparation lines
+    const totalValPrep=prepLines.reduce((t,l)=>t+l.qty*(l.unitHT||0),0);
+    const costPrep=qtyPrep>0?totalValPrep/qtyPrep:0;
+
+    return {...s,qtyLiv,qtyPrep,costLiv,costPrep};
   });
 }
 
@@ -894,8 +906,12 @@ function renderStock(){
   else if(stockFilter==="livraison")   filtered=withStatus.filter(s=>s.qtyLiv>0);
   else if(stockFilter==="preparation") filtered=withStatus.filter(s=>s.qtyPrep>0);
 
-  const total=filtered.reduce((s,i)=>s+(i.unitCostHT||0)*i.qty,0);
-  const filterLabel=stockFilter==="local"?"Au local":stockFilter==="livraison"?"En livraison":stockFilter==="preparation"?"En préparation":"Tous les produits";
+  const total=filtered.reduce((s,i)=>{
+    if(stockFilter==="livraison")return s+(i.costLiv||0)*i.qtyLiv;
+    if(stockFilter==="preparation")return s+(i.costPrep||0)*i.qtyPrep;
+    return s+(i.unitCostHT||0)*i.qty;
+  },0);
+  const filterLabel=stockFilter==="local"?"📦 Au local":stockFilter==="livraison"?"🚚 En livraison":stockFilter==="preparation"?"⏳ En préparation":"Tous les produits";
   document.getElementById("stock-sub").textContent=`${filterLabel} · ${filtered.length} produit${filtered.length>1?"s":""} · Valeur : ${fmtEur(total)} HT`;
 
   document.getElementById("stock-body").innerHTML=filtered.length===0
@@ -916,8 +932,8 @@ function renderStock(){
       ${showSubs&&s.qtyPrep>0?`<br/><span style="font-size:11px;color:var(--yellow)">⏳ ${s.qtyPrep} en préparation</span>`:""}
     </td>
     <td style="color:var(--muted)">${s.reserved}</td>
-    <td style="color:var(--muted)">${stockFilter==="livraison"||stockFilter==="preparation"?"—":fmtEur(s.unitCostHT||0)}</td>
-    <td style="font-weight:700">${stockFilter==="livraison"||stockFilter==="preparation"?"—":fmtEur(displayVal)}</td>
+    <td style="color:var(--muted)">${stockFilter==="livraison"?fmtEur(s.costLiv||0):stockFilter==="preparation"?fmtEur(s.costPrep||0):fmtEur(s.unitCostHT||0)}</td>
+    <td style="font-weight:700">${stockFilter==="livraison"?fmtEur((s.costLiv||0)*s.qtyLiv):stockFilter==="preparation"?fmtEur((s.costPrep||0)*s.qtyPrep):fmtEur(displayVal)}</td>
     <td>${badge(s.shopifyLinked?"Lié":"Manuel",s.shopifyLinked?"bg":"bx")}</td>
     <td style="color:var(--muted);font-size:12px">${fmtDate(s.lastUpdate)}</td>
     <td><button class="btn btn-sm btn-secondary" onclick="openAddStock('${s.id}')">Modifier</button></td>
