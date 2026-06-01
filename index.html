@@ -1374,6 +1374,7 @@ function submitPurchase(){
 function _openClientModal(c){
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">${c?"Modifier le client":"Nouveau client"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <input type="hidden" id="cl-id" value="${c?.id||""}"/>
     <div class="field"><label>Nom / Entreprise *</label><input class="input" id="cl-name" value="${c?.name||""}" placeholder="Ex: Boutique Rosa"/></div>
     <div class="field"><label>Adresse</label><input class="input" id="cl-addr" value="${c?.address||""}" placeholder="12 rue de la Paix, 75001 Paris"/></div>
     <div class="row2">
@@ -1410,13 +1411,14 @@ function openAddStock(id){
   const s=id&&id!=='null'?stock.find(x=>String(x.id)===String(id)):null;
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">${s?"Modifier le stock":"Nouveau produit"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <input type="hidden" id="sk-id" value="${id||""}"/>
     <div class="field"><label>Nom du produit</label><input class="input" id="sk-name" value="${s?.name||""}" placeholder="Ex: Salopette Dickies"/></div>
     <div class="row2">
       <div class="field"><label>Quantité</label><input class="input" type="number" id="sk-qty" value="${s?.qty||0}" min="0"/></div>
       <div class="field"><label>Coût unit. HT (€)</label><input class="input" type="number" id="sk-cost" value="${s?.unitCostHT||0}" step="0.01"/></div>
     </div>
     <div class="field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600"><input type="checkbox" id="sk-linked" ${s?.shopifyLinked?"checked":""} style="width:15px;height:15px;accent-color:var(--orange)"/> Lié à Shopify</label></div>
-    <button class="btn btn-primary" style="width:100%" onclick="submitStock(${id||"null"})">Enregistrer</button>
+    <button class="btn btn-primary" style="width:100%" onclick="submitStockForm()">Enregistrer</button>
   </div></div>`);
 }
 function submitStock(id){
@@ -1444,6 +1446,7 @@ function openAddCharge(id){
   const ch=id&&id!=='null'?charges.find(x=>String(x.id)===String(id)):null;
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">${ch?"Modifier la charge":"Nouvelle charge"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <input type="hidden" id="ch-id" value="${id||""}"/>
     <div class="field"><label>Nom *</label><input class="input" id="ch-name" value="${ch?.name||""}" placeholder="Ex: Loyer, Cartons, Abonnement logiciel…"/></div>
     <div class="row2">
       <div class="field"><label>Type</label><select class="input" id="ch-type">
@@ -1462,7 +1465,7 @@ function openAddCharge(id){
     </div>
     <div class="field"><label>Note (optionnel)</label><input class="input" id="ch-note" value="${ch?.note||""}" placeholder="Ex: par colis expédié"/></div>
     <div class="field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600"><input type="checkbox" id="ch-active" ${ch?.active!==false?"checked":""} style="width:15px;height:15px;accent-color:var(--orange)"/> Charge active</label></div>
-    <button class="btn btn-primary" style="width:100%" onclick="submitCharge(${id||"null"})">Enregistrer</button>
+    <button class="btn btn-primary" style="width:100%" onclick="submitChargeForm()">Enregistrer</button>
   </div></div>`);
 }
 function submitCharge(id){
@@ -1983,6 +1986,7 @@ function openAddTodo(defaultStatus){
   const userOpts=allUsers.map(u=>`<option value="${u.id}">${u.display_name}</option>`).join("");
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">+ Nouvelle tâche</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <input type="hidden" id="td-id" value=""/>
     <div class="field"><label>Titre *</label><input class="input" id="td-title" placeholder="Ex: Appeler le fournisseur…"/></div>
     <div class="field"><label>Description</label><textarea class="input" id="td-desc" rows="2" style="resize:vertical" placeholder="Détails…"></textarea></div>
     <div class="row2">
@@ -2020,6 +2024,7 @@ function openTodoDetail(t){
   const creator=allUsers.find(u=>String(u.id)===String(t).created_by);
   const userOpts=allUsers.map(u=>`<option value="${u.id}" ${t.assigned_to===u.id?"selected":""}>${u.display_name}</option>`).join("");
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <input type="hidden" id="td-id" value="${t.id}"/>
     <div class="modal-hdr"><div class="modal-title">✏️ Modifier la tâche</div><button class="modal-close" onclick="closeModal()">✕</button></div>
     <div class="field"><label>Titre</label><input class="input" id="td-title" value="${t.title}"/></div>
     <div class="field"><label>Description</label><textarea class="input" id="td-desc" rows="2" style="resize:vertical">${t.description||""}</textarea></div>
@@ -2205,6 +2210,24 @@ async function saveSupplier(s){
 async function saveCompanyInfo(){
   const ci=companyInfo;
   await dbPatch("company_info",{id:1,name:ci.name,legal_form:ci.legalForm,address:ci.address,zip_city:ci.zipCity,siret:ci.siret,tva_intra:ci.tvaIntra,capital:ci.capital,rcs:ci.rcs,email:ci.email,phone:ci.phone,website:ci.website,iban:ci.iban,bic:ci.bic,bank:ci.bank,payment_terms:ci.paymentTerms,late_interest:ci.lateInterest,recovery_fee:ci.recoveryFee});
+}
+
+// ═══════════════════════════ MODAL WRAPPERS ══════════════════════════════════
+function submitStockForm(){
+  const id=document.getElementById("sk-id")?.value||null;
+  submitStock(id||null);
+}
+function submitChargeForm(){
+  const id=document.getElementById("ch-id")?.value||null;
+  submitCharge(id||null);
+}
+function submitClientForm(){
+  const id=document.getElementById("cl-id")?.value||null;
+  submitClient(id||null);
+}
+function submitTodoForm(){
+  const id=document.getElementById("td-id")?.value||null;
+  submitTodo(id||null);
 }
 
 // ═══════════════════════════ INIT ════════════════════════════════════════════
