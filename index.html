@@ -851,7 +851,7 @@ function renderClients(search){
   const filtered=clients.filter(c=>c.name.toLowerCase().includes((search||"").toLowerCase())||(c.siret||"").includes(search||""));
   document.getElementById("clients-sub").textContent=`${clients.length} client${clients.length>1?"s":""} enregistré${clients.length>1?"s":""}`;
   document.getElementById("clients-body").innerHTML=filtered.length===0?`<tr><td colspan="8" class="empty-state">Aucun client</td></tr>`:filtered.map(c=>`<tr>
-    <td><div style="display:flex;align-items:center;gap:10px"><div class="avatar">${c.name[0].toUpperCase()}</div><span style="font-weight:700">${c.name}</span></div></td>
+    <td><div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openClientDetail('${c.id}')"><div class="avatar">${c.name[0].toUpperCase()}</div><span style="font-weight:700;color:var(--navy)">${c.name} <span style="color:var(--orange);font-size:11px">↗</span></span></div></td>
     <td style="color:var(--muted);font-size:12px">${c.address||"—"}</td>
     <td style="font-family:monospace;font-size:12px;color:var(--muted)">${c.siret||"—"}</td>
     <td style="font-size:12px;color:var(--muted)">${c.tvaIntra||"—"}</td>
@@ -862,6 +862,100 @@ function renderClients(search){
   </tr>`).join("");
 }
 function deleteClient(id){if(!confirm("Supprimer ce client ?"))return;clients=clients.filter(c=>String(c.id)!==String(id));dbDelete("clients",id);renderClients("");}
+function openClientDetail(id){
+  const cl=clients.find(x=>String(x.id)===String(id));if(!cl)return;
+
+  // Historique des ventes de ce client
+  const hist=[...sales,...shopify.filter(o=>o.status==="paid")]
+    .filter(s=>String(s.clientId)===String(id)||s.client===cl.name)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+  const totalTTC=hist.reduce((s,v)=>s+v.totalTTC,0);
+  const nbCommandes=hist.length;
+  const panier=nbCommandes>0?totalTTC/nbCommandes:0;
+  const lastOrder=hist[0];
+
+  // Produits les plus achetés
+  const prodMap={};
+  hist.forEach(s=>{
+    const lines=s._lines&&s._lines.length?s._lines:[{product:s.product,qty:s.qty||1,totalHT:(s.totalTTC/1.2)}];
+    lines.forEach(l=>{
+      if(!prodMap[l.product])prodMap[l.product]={qty:0,totalHT:0};
+      prodMap[l.product].qty+=l.qty||1;
+      prodMap[l.product].totalHT+=l.totalHT||0;
+    });
+  });
+  const topProds=Object.entries(prodMap).sort((a,b)=>b[1].totalHT-a[1].totalHT).slice(0,5);
+
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
+    <div class="modal-hdr">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="avatar" style="width:42px;height:42px;font-size:16px;background:var(--navy)">${cl.name[0].toUpperCase()}</div>
+        <div><div class="modal-title">${cl.name}</div>${cl.address?`<div style="font-size:12px;color:var(--muted)">${cl.address}</div>`:""}</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
+      <div style="background:var(--orange-pale);border-radius:10px;padding:13px">
+        <div style="font-size:10px;font-weight:700;color:#c45e0a;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">CA Total TTC</div>
+        <div style="font-size:18px;font-weight:900;color:#c45e0a">${fmtEur(totalTTC)}</div>
+      </div>
+      <div style="background:#f7f8fc;border-radius:10px;padding:13px">
+        <div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Commandes</div>
+        <div style="font-size:18px;font-weight:900;color:var(--navy)">${nbCommandes}</div>
+      </div>
+      <div style="background:#f7f8fc;border-radius:10px;padding:13px">
+        <div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Panier moyen</div>
+        <div style="font-size:18px;font-weight:900;color:var(--navy)">${fmtEur(panier)}</div>
+      </div>
+    </div>
+
+    <!-- Infos légales -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      ${cl.siret?`<div class="sub-box"><div class="sub-box-title">SIRET</div><div style="font-family:monospace;font-size:13px">${cl.siret}</div></div>`:""}
+      ${cl.tvaIntra?`<div class="sub-box"><div class="sub-box-title">N° TVA</div><div style="font-size:13px">${cl.tvaIntra}</div></div>`:""}
+      ${cl.email?`<div class="sub-box"><div class="sub-box-title">Email</div><div style="font-size:13px"><a href="mailto:${cl.email}" style="color:var(--orange)">${cl.email}</a></div></div>`:""}
+      ${cl.phone?`<div class="sub-box"><div class="sub-box-title">Téléphone</div><div style="font-size:13px">${cl.phone}</div></div>`:""}
+    </div>
+
+    <!-- Top produits -->
+    ${topProds.length>0?`
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:10px">Top produits achetés</div>
+    <div style="margin-bottom:16px">
+      ${topProds.map(([prod,data])=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f7f8fc">
+        <div><div style="font-weight:600;font-size:13px">${prod}</div><div style="font-size:11px;color:var(--muted)">${data.qty} unités</div></div>
+        <div style="font-weight:700;color:var(--green)">${fmtEur(data.totalHT)} HT</div>
+      </div>`).join("")}
+    </div>`:""}
+
+    <!-- Historique commandes -->
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:10px">Historique (${hist.length} commande${hist.length>1?"s":""})</div>
+    ${hist.length===0?`<p style="color:var(--light);font-size:13px">Aucune commande.</p>`:`
+    <div class="tbl-wrap" style="max-height:220px;overflow-y:auto">
+      <table><thead><tr>
+        <th>N° Facture</th><th>Produit</th><th>Montant TTC</th><th>Date</th><th>Source</th>
+      </tr></thead><tbody>
+        ${hist.map(s=>`<tr>
+          <td style="font-family:monospace;font-size:11px;color:var(--orange)">${s.invoiceNum||"—"}</td>
+          <td style="font-size:12px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.product}</td>
+          <td style="font-weight:700;color:var(--green)">${fmtEur(s.totalTTC)}</td>
+          <td style="font-size:12px;color:var(--muted)">${fmtDate(s.date)}</td>
+          <td>${s.source==="shopify"?`<span class="badge bg">Shopify</span>`:`<span class="badge bo">Manuel</span>`}</td>
+        </tr>`).join("")}
+      </tbody></table>
+    </div>`}
+
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="btn btn-secondary" style="flex:1" onclick="closeModal();openEditClient('${id}')">✏️ Modifier</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteClient('${id}')">Supprimer</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
+    </div>
+  </div></div>`);
+}
+
 function openEditClient(id){
   const c=clients.find(x=>String(x.id)===String(id));if(!c)return;
   _openClientModal(c);
