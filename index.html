@@ -728,9 +728,11 @@ function renderDashboard(){
     <div class="tc-row"><div style="display:flex;align-items:center;gap:10px"><div class="avatar">${c.name[0].toUpperCase()}</div><div><div style="font-weight:700;font-size:13px">${c.name}</div><div style="font-size:11px;color:var(--muted)">${c.address?.split(",")[1]?.trim()||"—"}</div></div></div><span style="font-weight:800;color:var(--green);font-size:14px">${fmtEur(c.totalPurchases)}</span></div>`).join("");
 }
 
-function calcBenefice(){
+function calcBenefice(filteredSales){
+  // If filteredSales provided, use those; otherwise use all
+  const salesList = filteredSales || [...sales,...shopify.filter(o=>o.status==="paid")];
   let total=0;
-  [...sales,...shopify.filter(o=>o.status==="paid")].forEach(s=>{
+  salesList.forEach(s=>{
     const unitSaleHT=s.unitHT||(s.totalTTC/1.2/(s.qty||1));
     const qty=s.qty||1;
     let cost=0;
@@ -2696,6 +2698,8 @@ async function loadAllData(){
     if(Array.isArray(ctr)&&ctr[0]) globalInvCounter=ctr[0].current_value||0;
     renderDashboard();
     notify("✅ Données chargées");
+    // Auto-charger les commandes Shopify
+    setTimeout(()=>loadShopifyOrders().then(()=>renderDashboard()).catch(e=>console.warn("Shopify:",e.message)), 500);
   } catch(e){
     console.error("loadAllData error",e);
     notify("⚠ Chargement local (Supabase non connecté)");
