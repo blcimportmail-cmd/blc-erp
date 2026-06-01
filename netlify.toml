@@ -18,28 +18,7 @@
   to = "/.netlify/functions/supabase-proxy/:splat"
   status = 200
 
-[build]
-  publish = "."
-  functions = "netlify/functions"
- 
-[[redirects]]
-  from = "/api/shopify/*"
-  to = "/.netlify/functions/shopify-proxy/:splat"
-  status = 200
- 
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-Content-Type-Options = "nosniff"
- 
-[[redirects]]
-  from = "/api/supabase/*"
-  to = "/.netlify/functions/supabase-proxy/:splat"
-  status = 200
- 
 [[redirects]]
   from = "/shopify-auth"
   to = "/.netlify/functions/shopify-auth"
   status = 200
-
