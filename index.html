@@ -2863,6 +2863,7 @@ async function loadPayouts(){
 
 async function loadPayoutOrders(payoutId, containerId){
   const el=document.getElementById(containerId);
+  if(!el) return;
   if(el.dataset.loaded==="true"){
     el.style.display=el.style.display==="none"?"block":"none";
     return;
@@ -2872,33 +2873,70 @@ async function loadPayoutOrders(payoutId, containerId){
   try {
     const data = await shopifyFetch(`/shopify_payments/payouts/${payoutId}/transactions.json?limit=250`);
     const txns = data.transactions || [];
-    // Match transactions to our shopify orders
-    const orderTxns = txns.filter(t=>t.type==="payout" || t.source_type==="order");
-    const rows = txns.filter(t=>t.source_type==="order").map(t=>{
-      const order = shopify.find(o=>String(o.shopifyOrderId)===String(t.source_id));
-      return `<tr style="border-bottom:1px solid #f7f8fc">
-        <td style="padding:9px 14px;font-family:monospace;font-size:11px;color:var(--orange)">${order?.invoiceNum||"—"}</td>
-        <td style="padding:9px 14px;font-size:12px;font-weight:600">${order?.client||t.source_id}</td>
-        <td style="padding:9px 14px;font-size:12px;color:var(--muted)">${order?.product||"—"}</td>
-        <td style="padding:9px 14px;font-size:12px;color:var(--muted)">${order?.date?fmtDate(order.date):"—"}</td>
-        <td style="padding:9px 14px;font-size:12px;font-weight:700;color:var(--green)">${fmtEur(parseFloat(t.amount||0))}</td>
-        ${order?`<td style="padding:9px 14px"><button class="btn btn-sm btn-ghost" onclick="dlInvoice('${order.id}')">🧾</button></td>`:`<td></td>`}
+
+    // Only keep "charge" type transactions (= commandes)
+    const charges = txns.filter(t=>t.source_type==="charge"||t.type==="charge");
+
+    if(!charges.length){
+      el.innerHTML=`<div style="padding:14px;text-align:center;color:var(--light);font-size:12px">Aucune commande dans ce virement</div>`;
+      el.dataset.loaded="true";
+      return;
+    }
+
+    // Match via source_order_id → shopifyOrderId
+    const rows = charges.map(t=>{
+      const order = shopify.find(o=>
+        String(o.shopifyOrderId)===String(t.source_order_id) ||
+        String(o.shopifyOrderId)===String(t.source_id)
+      );
+      const amount=parseFloat(t.amount||0);
+      const fee=parseFloat(t.fee||0);
+      const net=parseFloat(t.net||amount);
+      return `<tr style="border-bottom:1px solid #f0f2f8">
+        <td style="padding:10px 14px;font-family:monospace;font-size:11px;color:var(--orange);font-weight:700">${order?.invoiceNum||"—"}</td>
+        <td style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--navy)">${order?.client||"Commande #"+t.source_order_id}</td>
+        <td style="padding:10px 14px;font-size:11px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${order?.product||"—"}</td>
+        <td style="padding:10px 14px;font-size:12px;color:var(--muted)">${order?.date?fmtDate(order.date):"—"}</td>
+        <td style="padding:10px 14px;font-size:12px;font-weight:700;color:var(--green)">${fmtEur(amount)}</td>
+        <td style="padding:10px 14px;font-size:11px;color:var(--red)">-${fmtEur(fee)}</td>
+        <td style="padding:10px 14px;font-size:12px;font-weight:800;color:var(--navy)">${fmtEur(net)}</td>
+        <td style="padding:10px 14px">
+          ${order
+            ?`<button class="btn btn-sm btn-ghost" onclick="dlInvoice('${order.id}')" title="Télécharger la facture">🧾</button>`
+            :`<span style="font-size:10px;color:var(--light)">Non lié</span>`
+          }
+        </td>
       </tr>`;
     }).join("");
-    el.innerHTML=rows?`<table style="width:100%;border-collapse:collapse">
-      <thead><tr style="background:#f7f8fc">
-        <th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;text-align:left">N° Facture</th>
-        <th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;text-align:left">Client</th>
-        <th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;text-align:left">Produit</th>
-        <th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;text-align:left">Date</th>
-        <th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;text-align:left">Montant</th>
-        <th style="padding:8px 14px"></th>
+
+    const totalNet=charges.reduce((s,t)=>s+parseFloat(t.net||0),0);
+    const totalFee=charges.reduce((s,t)=>s+parseFloat(t.fee||0),0);
+    const totalGross=charges.reduce((s,t)=>s+parseFloat(t.amount||0),0);
+
+    el.innerHTML=`<table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:#0F1535">
+        <th style="padding:9px 14px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;text-align:left">N° Facture</th>
+        <th style="padding:9px 14px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;text-align:left">Client</th>
+        <th style="padding:9px 14px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;text-align:left">Produit</th>
+        <th style="padding:9px 14px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;text-align:left">Date</th>
+        <th style="padding:9px 14px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;text-align:left">Montant</th>
+        <th style="padding:9px 14px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;text-align:left">Frais</th>
+        <th style="padding:9px 14px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;text-align:left">Net reçu</th>
+        <th style="padding:9px 14px"></th>
       </tr></thead>
       <tbody>${rows}</tbody>
-    </table>`:`<div style="padding:14px;text-align:center;color:var(--light);font-size:12px">Aucune commande trouvée dans ce virement</div>`;
+      <tfoot><tr style="background:#f7f8fc;border-top:2px solid #e8eaf0">
+        <td colspan="4" style="padding:10px 14px;font-size:12px;font-weight:700;color:var(--navy)">${charges.length} commande${charges.length>1?"s":""}</td>
+        <td style="padding:10px 14px;font-size:12px;font-weight:700;color:var(--green)">${fmtEur(totalGross)}</td>
+        <td style="padding:10px 14px;font-size:12px;font-weight:700;color:var(--red)">-${fmtEur(totalFee)}</td>
+        <td style="padding:10px 14px;font-size:13px;font-weight:900;color:var(--navy)">${fmtEur(totalNet)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>`;
     el.dataset.loaded="true";
   } catch(err) {
     el.innerHTML=`<div style="padding:14px;color:var(--red);font-size:12px">Erreur: ${err.message}</div>`;
+    console.error("loadPayoutOrders error:", err);
   }
 }
 
