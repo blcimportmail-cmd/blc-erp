@@ -422,7 +422,7 @@ function calcBenefice(){
     const unitSaleHT=s.unitHT||(s.totalTTC/1.2/(s.qty||1));
     const qty=s.qty||1;
     let cost=0;
-    if(s.linkedStockId){const p=stock.find(x=>x.id===s.linkedStockId);cost=p?.unitCostHT||0;}
+    if(s.linkedStockId){const p=stock.find(x=>String(x.id)===String(s).linkedStockId);cost=p?.unitCostHT||0;}
     else{const p=stock.find(x=>s.product.toLowerCase().includes(x.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));cost=p?.unitCostHT||0;}
     total+=qty*(unitSaleHT-cost);
   });
@@ -436,8 +436,8 @@ function resequenceInvoices(){
   all.forEach(item=>{
     seq++;
     const num=`FAC-${String(seq).padStart(3,"0")}`;
-    if(item._t==="manual") sales=sales.map(s=>s.id===item.id?{...s,invoiceNum:num,globalSeq:seq}:s);
-    else shopify=shopify.map(s=>s.id===item.id?{...s,invoiceNum:num,globalSeq:seq}:s);
+    if(item._t==="manual") sales=sales.map(s=>String(s.id)===String(item).id?{...s,invoiceNum:num,globalSeq:seq}:s);
+    else shopify=shopify.map(s=>String(s.id)===String(item).id?{...s,invoiceNum:num,globalSeq:seq}:s);
   });
   globalInvCounter=seq;
 }
@@ -617,7 +617,7 @@ function renderDashboard(){
     const unitSaleHT=s.unitHT||(s.totalTTC/1.2/(s.qty||1));
     const qty=s.qty||1;
     let cost=0;
-    if(s.linkedStockId){const p=stock.find(x=>x.id===s.linkedStockId);cost=p?.unitCostHT||0;}
+    if(s.linkedStockId){const p=stock.find(x=>String(x.id)===String(s).linkedStockId);cost=p?.unitCostHT||0;}
     else{const p=stock.find(x=>(s.product||"").toLowerCase().includes(x.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));cost=p?.unitCostHT||0;}
     beneficeProduit+=qty*(unitSaleHT-cost);
   });
@@ -670,7 +670,7 @@ function calcBenefice(){
     const unitSaleHT=s.unitHT||(s.totalTTC/1.2/(s.qty||1));
     const qty=s.qty||1;
     let cost=0;
-    if(s.linkedStockId){const p=stock.find(x=>x.id===s.linkedStockId);cost=p?.unitCostHT||0;}
+    if(s.linkedStockId){const p=stock.find(x=>String(x.id)===String(s).linkedStockId);cost=p?.unitCostHT||0;}
     else{const p=stock.find(x=>(s.product||"").toLowerCase().includes(x.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));cost=p?.unitCostHT||0;}
     total+=qty*(unitSaleHT-cost);
   });
@@ -693,7 +693,7 @@ function renderVentes(){
     <td style="font-weight:700;color:var(--green)">${fmtEur(s.totalTTC)}</td>
     <td style="color:var(--muted)">${fmtDate(s.date)}</td>
     <td>${badge(s.source==="shopify"?"Shopify":"Manuel",s.source==="shopify"?"bg":"bo")}</td>
-    <td>${s.source==="manual"?`<button class="btn btn-sm btn-ghost" onclick="dlInvoice(${s.id})">🧾 Télécharger</button>`:`<span style="font-size:11px;color:var(--light)">Auto</span>`}</td>
+    <td>${s.source==="manual"?`<button class="btn btn-sm btn-ghost" onclick="dlInvoice('${s.id}')">🧾 Télécharger</button>`:`<span style="font-size:11px;color:var(--light)">Auto</span>`}</td>
   </tr>`).join("");
 }
 function toggleSortVentes(){sortVentes=sortVentes==="date_desc"?"date_asc":"date_desc";renderVentes();}
@@ -710,7 +710,7 @@ function renderAchats(){
   document.getElementById("achats-date-th").innerHTML=`Date ${sortBtn}`;
   document.getElementById("achats-body").innerHTML=sorted.length===0?`<tr><td colspan="10" class="empty-state">Aucun achat enregistré</td></tr>`:sorted.map(p=>{
     const cfg=STATUS[p.stockStatus]||STATUS.preparation;
-    const linkedProd=p.linkedStockId?stock.find(s=>s.id===p.linkedStockId):null;
+    const linkedProd=p.linkedStockId?stock.find(s=>String(s.id)===String(p).linkedStockId):null;
     return `<tr>
       <td style="font-weight:700">${p.supplierId?`<span style="cursor:pointer;color:var(--navy)" onclick="openSupplierDetail('${p.supplierId}')">${p.supplier} <span style="color:var(--orange);font-size:11px">↗</span></span>`:p.supplier}</td>
       <td style="color:var(--muted)">${p.description}</td>
@@ -745,10 +745,10 @@ function changeStatus(id,newStatus){
   purchases=purchases.map(p=>String(p.id)===String(id)?{...p,stockStatus:newStatus}:p);
   renderAchats();
   notify(`✅ ${STATUS[newStatus]?.icon} ${STATUS[newStatus]?.label}`);
-  const updatedP=purchases.find(p=>p.id===id);
+  const updatedP=purchases.find(p=>String(p.id)===String(id));
   if(updatedP) dbPatch("purchases",{id:updatedP.id,stock_status:newStatus});
   const lns=updatedP?._lines||[];
-  lns.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:new Date().toISOString().split("T")[0]});}});
+  lns.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l).linkedStockId);if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:new Date().toISOString().split("T")[0]});}});
 }
 function addStockFromPurchase(p){
   const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,qty:p.qty}];
@@ -756,7 +756,7 @@ function addStockFromPurchase(p){
     if(!l.linkedStockId)return;
     let found=false;
     stock=stock.map(s=>{
-      if(s.id===l.linkedStockId){found=true;return {...s,qty:s.qty+l.qty,lastUpdate:p.date};}
+      if(String(s.id)===String(l).linkedStockId){found=true;return {...s,qty:s.qty+l.qty,lastUpdate:p.date};}
       return s;
     });
     if(!found) console.warn("addStock: linkedStockId not found",l.linkedStockId,"in",stock.map(s=>s.id));
@@ -841,8 +841,8 @@ function renderCharges(){
     <td><div style="display:flex;gap:5px"><button class="btn btn-sm btn-secondary" onclick="openAddCharge('${ch.id}')">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteCharge('${ch.id}')">✕</button></div></td>
   </tr>`).join("");
 }
-function toggleCharge(id,active){charges=charges.map(ch=>ch.id===id?{...ch,active}:ch);renderCharges();}
-function deleteCharge(id){if(!confirm("Supprimer ?"))return;charges=charges.filter(ch=>ch.id!==id);renderCharges();}
+function toggleCharge(id,active){charges=charges.map(ch=>String(ch.id)===String(id)?{...ch,active}:ch);renderCharges();}
+function deleteCharge(id){if(!confirm("Supprimer ?"))return;charges=charges.filter(ch=>String(ch.id)!==String(id));renderCharges();}
 
 // ═══════════════════════════ FACTURES ════════════════════════════════════════
 function renderFactures(){
@@ -868,9 +868,9 @@ function deleteInvoice(id){
   if(!confirm("Supprimer cette facture ? Les numéros seront recalculés."))return;
   const s=sales.find(x=>String(x.id)===String(id));
   if(s){
-    if(s.linkedStockId)stock=stock.map(st=>st.id===s.linkedStockId?{...st,qty:st.qty+(s.qty||0)}:st);
-    else{const m=stock.find(st=>s.product.toLowerCase().includes(st.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m)stock=stock.map(st=>st.id===m.id?{...st,qty:st.qty+(s.qty||0)}:st);}
-    if(s.clientId)clients=clients.map(c=>c.id===s.clientId?{...c,totalPurchases:Math.max(0,(c.totalPurchases||0)-s.totalTTC)}:c);
+    if(s.linkedStockId)stock=stock.map(st=>String(st.id)===String(s).linkedStockId?{...st,qty:st.qty+(s.qty||0)}:st);
+    else{const m=stock.find(st=>s.product.toLowerCase().includes(st.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m)stock=stock.map(st=>String(st.id)===String(m).id?{...st,qty:st.qty+(s.qty||0)}:st);}
+    if(s.clientId)clients=clients.map(c=>String(c.id)===String(s).clientId?{...c,totalPurchases:Math.max(0,(c.totalPurchases||0)-s.totalTTC)}:c);
   }
   sales=sales.filter(x=>String(x.id)!==String(id));
   renderFactures();notify("🗑 Facture supprimée · stock et CA ajustés");
@@ -1006,14 +1006,14 @@ function sendInvoiceByMail(id){
     <div class="field"><label>Email du client</label><input class="input" id="mail-to" value="${clientObj?.email||""}" placeholder="client@exemple.fr"/></div>
     <div class="field"><label>Message (optionnel)</label><textarea class="input" id="mail-msg" rows="3" style="resize:vertical" placeholder="Bonjour, veuillez trouver ci-joint votre facture…"></textarea></div>
     <div style="background:var(--yellow-pale);border-radius:9px;padding:10px 12px;margin-bottom:13px;font-size:12px;color:var(--yellow)">ℹ Le PDF sera téléchargé. Votre client mail s'ouvrira avec les infos pré-remplies — joignez le PDF manuellement.</div>
-    <button class="btn btn-primary" style="width:100%" onclick="submitSendMail(${id})">Préparer l'envoi</button>
+    <button class="btn btn-primary" style="width:100%" onclick="submitSendMail('${id}')">Préparer l'envoi</button>
   </div></div>`);
 }
 async function submitSendMail(id){
   const to=document.getElementById("mail-to").value.trim();
   const msg=document.getElementById("mail-msg").value.trim();
   if(!to){notify("⚠ Entrez une adresse email");return;}
-  const s=sales.find(x=>x.id===id);if(!s)return;
+  const s=sales.find(x=>String(x.id)===String(id));if(!s)return;
   closeModal();
   await dlInvoice(id); // télécharge le PDF d'abord
   const subj=encodeURIComponent(`Facture ${s.invoiceNum} — ${companyInfo.name}`);
@@ -1086,7 +1086,7 @@ function saleAddLine(){
     </div>
     <div class="field" style="margin:0"><label>Qté</label><input class="input" type="number" id="sl-q-${id}" value="1" min="1" step="1" oninput="calcSaleTotal()"/></div>
     <div class="field" style="margin:0"><label>Prix u. HT (€)</label><input class="input" type="number" id="sl-u-${id}" step="0.01" placeholder="0.00" oninput="calcSaleTotal()"/></div>
-    <button class="btn btn-sm btn-danger" style="height:38px;margin-bottom:1px" onclick="saleRemoveLine(${id})">✕</button>`;
+    <button class="btn btn-sm btn-danger" style="height:38px;margin-bottom:1px" onclick="saleRemoveLine('${id}')">✕</button>`;
   wrap.appendChild(div);
 }
 
@@ -1181,12 +1181,12 @@ function submitSale(){
     if(stockItem?.shopifyVariantId) deductShopifyStock(stockItem, l.qty);
   });
 
-  if(clientObj)clients=clients.map(c=>c.id===clientObj.id?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
+  if(clientObj)clients=clients.map(c=>String(c.id)===String(clientObj).id?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
   // Save to Supabase
   const saleRow={invoice_num:ns.invoiceNum,global_seq:ns.globalSeq,client_id:ns.clientId||null,client_name:ns.client,product:ns.product,lines:ns._lines||[],qty:ns.qty,unit_ht:ns.unitHT,shipping:ns.shipping||0,total_ttc:ns.totalTTC,date:ns.date,source:"manual",linked_stock_id:ns.linkedStockId||null};
   dbPost("sales",saleRow).then(r=>{if(r&&r[0])ns.id=r[0].id;});
-  lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)dbPatch("stock",{id:s.id,qty:s.qty,unit_cost_ht:s.unitCostHT,last_update:ns.date,name:s.name,reserved:s.reserved||0,shopify_linked:s.shopifyLinked||false});}});
-  if(clientObj){const cl=clients.find(c=>c.id===clientObj.id);if(cl)dbPatch("clients",{id:cl.id,total_purchases:cl.totalPurchases});}
+  lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l).linkedStockId);if(s)dbPatch("stock",{id:s.id,qty:s.qty,unit_cost_ht:s.unitCostHT,last_update:ns.date,name:s.name,reserved:s.reserved||0,shopify_linked:s.shopifyLinked||false});}});
+  if(clientObj){const cl=clients.find(c=>String(c.id)===String(clientObj).id);if(cl)dbPatch("clients",{id:cl.id,total_purchases:cl.totalPurchases});}
   closeModal();renderVentes();
   notify(`✅ Vente ${num} · ${lines.length} produit${lines.length>1?"s":""} · ${fmtEur(ttc)}`);
 }
@@ -1257,7 +1257,7 @@ function purchAddLine(){
     </div>
     <div class="field" style="margin:0"><label>Qté</label><input class="input" type="number" id="pl-q-${id}" value="1" min="1" oninput="calcPurchTotal()"/></div>
     <div class="field" style="margin:0"><label>Prix u. HT (€)</label><input class="input" type="number" id="pl-u-${id}" step="0.01" placeholder="0.00" oninput="calcPurchTotal()"/></div>
-    <button class="btn btn-sm btn-danger" style="height:38px;margin-bottom:1px" onclick="purchRemoveLine(${id})">✕</button>`;
+    <button class="btn btn-sm btn-danger" style="height:38px;margin-bottom:1px" onclick="purchRemoveLine('${id}')">✕</button>`;
   wrap.appendChild(div);
 }
 
@@ -1315,7 +1315,7 @@ function submitPurchase(){
         stock=[...stock,ns];linkedStockId=tmpId;
         // Save to DB and update id
         dbPost("stock",{name:prodName,qty:0,reserved:0,unit_cost_ht:uht,shopify_linked:false,last_update:ns.lastUpdate}).then(r=>{
-          if(r&&r[0]){const realId=r[0].id;stock=stock.map(s=>s.id===tmpId?{...s,id:realId}:s);}
+          if(r&&r[0]){const realId=r[0].id;stock=stock.map(s=>String(s.id)===String(tmpId)?{...s,id:realId}:s);}
         });
       }
     }else if(prodSel.value){
@@ -1352,7 +1352,7 @@ function submitPurchase(){
     lines.forEach(l=>{
       if(!l.linkedStockId)return;
       stock=stock.map(s=>{
-        if(s.id===l.linkedStockId){
+        if(String(s.id)===String(l).linkedStockId){
           return {...s, qty: s.qty + l.qty, lastUpdate: date};
         }
         return s;
@@ -1363,9 +1363,9 @@ function submitPurchase(){
   // Save to Supabase
   const purchRow={supplier_id:np.supplierId||null,supplier_name:np.supplier,description:np.description,lines:np._lines||[],qty:np.qty,unit_ht:np.unitHT||0,amount_ht:np.amountHT,date:np.date,has_invoice:np.hasInvoice||false,invoice_file:np.invoiceFile||null,stock_status:np.stockStatus,linked_stock_id:np.linkedStockId||null};
   dbPost("purchases",purchRow).then(r=>{if(r&&r[0])np.id=r[0].id;});
-  if(status==="local") lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>x.id===l.linkedStockId);if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:np.date});}});
+  if(status==="local") lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l).linkedStockId);if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:np.date});}});
   // Save new supplier if created
-  if(supSel==="__new__"&&supplierId){const sup=suppliers.find(x=>x.id===supplierId);if(sup)dbPost("suppliers",{name:sup.name,contact:sup.contact||null,email:sup.email||null,phone:sup.phone||null}).then(r=>{if(r&&r[0])sup.id=r[0].id;});}
+  if(supSel==="__new__"&&supplierId){const sup=suppliers.find(x=>String(x.id)===String(supplierId));if(sup)dbPost("suppliers",{name:sup.name,contact:sup.contact||null,email:sup.email||null,phone:sup.phone||null}).then(r=>{if(r&&r[0])sup.id=r[0].id;});}
   closeModal();renderAchats();renderStock();
   notify(`✅ Achat enregistré · ${lines.length} produit${lines.length>1?"s":""} · ${fmtEur(totalHT)} HT`);
 }
@@ -1470,11 +1470,11 @@ function submitCharge(id){
   if(!name){notify("⚠ Nom obligatoire");return;}
   const ch={id:id||Date.now(),name,type:document.getElementById("ch-type").value,category:document.getElementById("ch-cat").value.trim(),amountHT:parseFloat(document.getElementById("ch-amount").value)||0,period:document.getElementById("ch-period").value,note:document.getElementById("ch-note").value.trim(),active:document.getElementById("ch-active").checked};
   if(id){
-    charges=charges.map(x=>x.id===id?ch:x);
+    charges=charges.map(x=>String(x.id)===String(id)?ch:x);
     dbPatch("charges",{id,name:ch.name,type:ch.type,category:ch.category,amount_ht:ch.amountHT,period:ch.period,note:ch.note,active:ch.active});
   } else {
     const row={name:ch.name,type:ch.type,category:ch.category,amount_ht:ch.amountHT,period:ch.period,note:ch.note,active:ch.active};
-    dbPost("charges",row).then(r=>{const newId=r&&r[0]?r[0].id:ch.id;ch.id=newId;charges=[...charges.filter(x=>x.id!==ch.id),ch];renderCharges();});
+    dbPost("charges",row).then(r=>{const newId=r&&r[0]?r[0].id:ch.id;ch.id=newId;charges=[...charges.filter(x=>String(x.id)!==String(ch).id),ch];renderCharges();});
     charges=[...charges,ch];
   }
   closeModal();renderCharges();notify(`✅ Charge "${name}" ${id?"mise à jour":"créée"}`);
@@ -1529,7 +1529,7 @@ function invAddLine(){
   </div>
   <div class="field" style="margin:0"><label>Qté</label><input class="input" type="number" id="il-q-${id}" value="1" min="1" oninput="invCalc()"/></div>
   <div class="field" style="margin:0"><label>Prix u. HT</label><input class="input" type="number" id="il-u-${id}" step="0.01" placeholder="0.00" oninput="invCalc()"/></div>
-  <button class="btn btn-sm btn-danger" style="height:38px;margin-bottom:1px" onclick="invRemoveLine(${id})">✕</button>`;
+  <button class="btn btn-sm btn-danger" style="height:38px;margin-bottom:1px" onclick="invRemoveLine('${id}')">✕</button>`;
   document.getElementById("inv-lines").appendChild(div);
 }
 function invProdChange(id,sel){
@@ -1551,7 +1551,7 @@ function submitCreateInvoice(){
     if(!clientName){notify("⚠ Entrez le nom du client");return;}
     clientObj={id:Date.now(),name:clientName,address:document.getElementById("inv-caddr")?.value.trim()||"",siret:document.getElementById("inv-csiret")?.value.trim()||"",tvaIntra:document.getElementById("inv-ctva")?.value.trim()||"",email:document.getElementById("inv-cemail")?.value.trim()||"",phone:document.getElementById("inv-cphone")?.value.trim()||"",totalPurchases:0};
     clients=[...clients,clientObj];
-  }else if(cidSel){clientObj=clients.find(c=>c.id===parseInt(cidSel));clientName=clientObj?.name||"";}
+  }else if(cidSel){clientObj=clients.find(c=>String(c.id)===String(parseInt)(cidSel));clientName=clientObj?.name||"";}
   if(!clientName){notify("⚠ Sélectionnez un client");return;}
   const lines=[];let totalHT=0;
   for(const id of(window._invLines||[])){
@@ -1570,7 +1570,7 @@ function submitCreateInvoice(){
   const num=nextFAC();
   const ns={id:Date.now(),invoiceNum:num,globalSeq:globalInvCounter,client:clientName,clientId:clientObj?.id||null,product:lines.map(l=>l.product).join(", "),qty:lines[0]?.qty||1,unitHT:lines[0]?.unitHT||0,shipping:ship,totalTTC:ttc,date,source:"manual",_lines:lines};
   sales=[ns,...sales];
-  if(clientObj)clients=clients.map(c=>c.id===clientObj.id?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
+  if(clientObj)clients=clients.map(c=>String(c.id)===String(clientObj).id?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
   const html=buildInvoiceHTML(num,clientObj,lines,date,ship);
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([html],{type:"text/html"}));a.download=`${num}-${clientName.replace(/\s/g,"_")}.html`;a.click();
   closeModal();renderFactures();notify(`🧾 Facture ${num} créée et téléchargée`);
@@ -1605,7 +1605,7 @@ function openEditSupplier(id){
     <div class="field"><label>Nom</label><input class="input" id="es-name" value="${s.name}"/></div>
     <div class="row2"><div class="field"><label>Email</label><input class="input" type="email" id="es-email" value="${s.email||""}"/></div><div class="field"><label>Téléphone</label><input class="input" id="es-phone" value="${s.phone||""}"/></div></div>
     <div class="field"><label>Contact</label><input class="input" id="es-contact" value="${s.contact||""}"/></div>
-    <button class="btn btn-primary" style="width:100%" onclick="submitEditSupplier(${id})">Enregistrer</button>
+    <button class="btn btn-primary" style="width:100%" onclick="submitEditSupplier('${id}')">Enregistrer</button>
   </div></div>`);
 }
 function submitEditSupplier(id){
@@ -1848,10 +1848,10 @@ function applyDicta(jsonStr){
     const num=nextFAC();
     sales=[{id:Date.now(),invoiceNum:num,globalSeq:globalInvCounter,client:clientName,product:result.sale.product,qty:result.sale.qty||1,unitHT:result.sale.unitHT||0,shipping:result.sale.shipping||0,totalTTC:result.sale.totalTTC,date:new Date().toISOString().split("T")[0],source:"manual"},...sales];
     const m=stock.find(s=>s.name.toLowerCase().includes((result.sale.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));
-    if(m)stock=stock.map(s=>s.id===m.id?{...s,qty:Math.max(0,s.qty-(result.sale.qty||1))}:s);
+    if(m)stock=stock.map(s=>String(s.id)===String(m).id?{...s,qty:Math.max(0,s.qty-(result.sale.qty||1))}:s);
     msgs.push(`Vente ${num}`);
   }
-  if(result.stock?.product&&result.stock?.qty){const m=stock.find(s=>s.name.toLowerCase().includes((result.stock.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m){stock=stock.map(s=>s.id===m.id?{...s,qty:s.qty+result.stock.qty}:s);msgs.push(`Stock +${result.stock.qty}`);}}
+  if(result.stock?.product&&result.stock?.qty){const m=stock.find(s=>s.name.toLowerCase().includes((result.stock.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m){stock=stock.map(s=>String(s.id)===String(m).id?{...s,qty:s.qty+result.stock.qty}:s);msgs.push(`Stock +${result.stock.qty}`);}}
   if(result.purchaseStatus?.supplier&&result.purchaseStatus?.newStatus){const m=purchases.find(p=>p.supplier.toLowerCase().includes((result.purchaseStatus.supplier||"").toLowerCase()));if(m){changeStatus(m.id,result.purchaseStatus.newStatus,{className:""});msgs.push("Statut mis à jour");}}
   closeModal();
   const active=document.querySelector(".nav-item.active");
@@ -1950,8 +1950,8 @@ function renderTodo(){
   document.getElementById("todo-board").innerHTML=Object.entries(STATUS_CONFIG).map(([status,cfg])=>{
     const items=cols[status]||[];
     const pCfg=t=>PRIORITY_CONFIG[t.priority]||PRIORITY_CONFIG.normal;
-    const assignedUser=t=>allUsers.find(u=>u.id===t.assigned_to);
-    const creatorUser=t=>allUsers.find(u=>u.id===t.created_by);
+    const assignedUser=t=>allUsers.find(u=>String(u.id)===String(t).assigned_to);
+    const creatorUser=t=>allUsers.find(u=>String(u.id)===String(t).created_by);
     return `<div class="todo-col">
       <div class="todo-col-hdr" style="color:${cfg.color}">
         <span>${cfg.icon} ${cfg.label}</span>
@@ -2016,8 +2016,8 @@ function openAddTodo(defaultStatus){
 
 function openTodoDetail(t){
   if(typeof t==="string")t=JSON.parse(t);
-  const assignedUser=allUsers.find(u=>u.id===t.assigned_to);
-  const creator=allUsers.find(u=>u.id===t.created_by);
+  const assignedUser=allUsers.find(u=>String(u.id)===String(t).assigned_to);
+  const creator=allUsers.find(u=>String(u.id)===String(t).created_by);
   const userOpts=allUsers.map(u=>`<option value="${u.id}" ${t.assigned_to===u.id?"selected":""}>${u.display_name}</option>`).join("");
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">✏️ Modifier la tâche</div><button class="modal-close" onclick="closeModal()">✕</button></div>
@@ -2074,14 +2074,14 @@ function submitTodo(id){
   };
   const row={title:t.title,description:t.description||null,assigned_to:t.assigned_to||null,created_by:t.created_by||null,due_date:t.due_date||null,priority:t.priority,status:t.status,is_global:t.is_global||false};
   if(id){
-    todos=todos.map(x=>x.id===id?{...x,...t}:x);
+    todos=todos.map(x=>String(x.id)===String(id)?{...x,...t}:x);
     dbPatch("todos",{id,...row});
   } else {
     todos=[t,...todos];
-    dbPost("todos",row).then(r=>{const newId=r&&r[0]?r[0].id:t.id;t.id=newId;todos=todos.map(x=>x.id===t.id?{...x,id:newId}:x);});
+    dbPost("todos",row).then(r=>{const newId=r&&r[0]?r[0].id:t.id;t.id=newId;todos=todos.map(x=>String(x.id)===String(t).id?{...x,id:newId}:x);});
   }
   closeModal();renderTodo();
-  notify(`✅ Tâche "${title}" ${id?"mise à jour":"créée"}${t.assigned_to?` → ${allUsers.find(u=>u.id===t.assigned_to)?.display_name}`:" (globale)"}`);
+  notify(`✅ Tâche "${title}" ${id?"mise à jour":"créée"}${t.assigned_to?` → ${allUsers.find(u=>String(u.id)===String(t).assigned_to)?.display_name}`:" (globale)"}`);
 }
 
 function deleteTodo(id){
