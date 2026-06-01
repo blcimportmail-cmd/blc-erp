@@ -2044,42 +2044,49 @@ async function loadShopifyOrders() {
   }
 }
 
-// Charger les produits et stock Shopify
+// Synchroniser le stock Shopify — LIER les produits sans écraser les quantités ERP
+// Puis POUSSER les quantités ERP vers Shopify
 async function loadShopifyStock() {
   try {
     const data = await shopifyFetch("/products.json?limit=250");
     const products = data.products || [];
+    let linked = 0, created = 0;
 
-    products.forEach(p => {
+    for(const p of products) {
       const { multiplier, name } = parseShopifyTitle(p.title);
-      p.variants.forEach(v => {
-        const lotQty = v.inventory_quantity || 0;
-        const realQty = lotQty * multiplier; // ex: 4 lots × 100 pcs = 400
+      for(const v of p.variants) {
+        if(v.inventory_management !== "shopify") continue;
 
-        // Try to find existing stock by shopifyVariantId or parsed name
+        // Find existing ERP product by variant ID or name
         const existing = stock.find(s =>
           s.shopifyVariantId === v.id ||
           s.name.toLowerCase() === name.toLowerCase()
         );
 
-        if (existing) {
+        if(existing) {
+          // Just link — DO NOT overwrite qty from Shopify
           existing.shopifyProductId = p.id;
           existing.shopifyVariantId = v.id;
           existing.shopifyLinked = true;
           existing.shopifyMultiplier = multiplier;
-          existing.qty = realQty;
-          existing.lastUpdate = new Date().toISOString().split("T")[0];
-          // Save updated stock to DB
-          dbPatch("stock", {
+          // Save link to DB (without changing qty)
+          await dbPatch("stock", {
             id: existing.id,
             name: existing.name,
-            qty: realQty,
+            qty: existing.qty,
             reserved: existing.reserved || 0,
             unit_cost_ht: existing.unitCostHT || 0,
             shopify_linked: true,
+            shopify_multiplier: multiplier,
             last_update: existing.lastUpdate
           });
-        } else if (v.inventory_management === "shopify") {
+          // Push ERP qty → Shopify (ERP is source of truth)
+          await syncStockToShopify(existing);
+          linked++;
+        } else {
+          // New product not in ERP yet — import from Shopify
+          const lotQty = v.inventory_quantity || 0;
+          const realQty = lotQty * multiplier;
           const newItem = {
             id: "tmp-" + Date.now() + Math.random(),
             name,
@@ -2093,24 +2100,25 @@ async function loadShopifyStock() {
             lastUpdate: new Date().toISOString().split("T")[0],
           };
           stock.push(newItem);
-          // Save to DB
-          dbPost("stock", {
+          const res = await dbPost("stock", {
             name,
             qty: realQty,
             reserved: 0,
             unit_cost_ht: 0,
             shopify_linked: true,
+            shopify_multiplier: multiplier,
             last_update: newItem.lastUpdate
-          }).then(r => {
-            if (r && r[0]) newItem.id = r[0].id;
           });
+          if(res && res[0]) newItem.id = res[0].id;
+          created++;
         }
-      });
-    });
+      }
+    }
     renderStock();
-    notify("✅ Stock Shopify synchronisé (quantités réelles)");
+    notify(`✅ Sync Shopify : ${linked} produits liés, ${created} nouveaux · Quantités ERP poussées vers Shopify`);
   } catch (err) {
-    notify("❌ Erreur stock Shopify : " + err.message);
+    notify("❌ Erreur sync Shopify : " + err.message);
+    console.error(err);
   }
 }
 
