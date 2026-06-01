@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/> 
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BLC Import — ERP Pro</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -273,6 +273,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
       <div><div class="page-title">Clients</div><div class="page-sub" id="clients-sub">—</div></div>
       <div style="display:flex;gap:10px;align-items:center">
         <input class="search-input" placeholder="Rechercher…" oninput="renderClients(this.value)"/>
+        <button class="btn btn-secondary" onclick="importShopifyClients()">🛍 Importer Shopify</button>
         <button class="btn btn-primary" onclick="openAddClient()">+ Nouveau client</button>
       </div>
     </div>
@@ -2841,6 +2842,85 @@ function renderPayouts(){
       <div id="${containerId}" style="display:none;border-top:1px solid var(--border);background:#fafbfd"></div>
     </div>`;
   }).join("");
+}
+
+// ═══════════════════════════ IMPORT CLIENTS SHOPIFY ═════════════════════════
+async function importShopifyClients(){
+  notify("⏳ Import des clients Shopify…");
+  try {
+    // Load customers from Shopify
+    const data = await shopifyFetch("/customers.json?limit=250&order=updated_at+DESC");
+    const customers = data.customers || [];
+    let added = 0, updated = 0;
+
+    for(const cust of customers){
+      const addr = cust.default_address || {};
+      const fullAddr = [addr.address1, addr.address2].filter(Boolean).join(", ");
+      const zipCity = [addr.zip, addr.city].filter(Boolean).join(" ");
+
+      // Calculate total purchases from Shopify orders
+      const custOrders = shopify.filter(o =>
+        o.client === `${cust.first_name} ${cust.last_name}`.trim() ||
+        o.clientEmail === cust.email
+      );
+      const totalTTC = custOrders.reduce((s,o)=>s+o.totalTTC, 0);
+
+      // Check if client already exists by email or name
+      const existing = clients.find(c =>
+        (cust.email && c.email === cust.email) ||
+        c.name === `${cust.first_name} ${cust.last_name}`.trim()
+      );
+
+      const clientData = {
+        name: `${cust.first_name} ${cust.last_name}`.trim() || cust.email,
+        address: fullAddr,
+        zipCity,
+        siret: "",
+        tvaIntra: "",
+        email: cust.email || "",
+        phone: cust.phone || addr.phone || "",
+        totalPurchases: Math.max(totalTTC, existing?.totalPurchases || 0),
+        shopifyCustomerId: cust.id,
+      };
+
+      if(existing){
+        // Update existing client
+        clients = clients.map(c => String(c.id)===String(existing.id) ? {...c,...clientData,id:existing.id} : c);
+        await dbPatch("clients", {
+          id: existing.id,
+          name: clientData.name,
+          address: clientData.address,
+          zip_city: zipCity,
+          email: clientData.email,
+          phone: clientData.phone,
+          total_purchases: clientData.totalPurchases,
+        });
+        updated++;
+      } else {
+        // Create new client
+        const row = {
+          name: clientData.name,
+          address: clientData.address,
+          zip_city: zipCity,
+          siret: "",
+          tva_intra: "",
+          email: clientData.email,
+          phone: clientData.phone,
+          total_purchases: clientData.totalPurchases,
+        };
+        const res = await dbPost("clients", row);
+        const newId = res&&res[0] ? res[0].id : "tmp-"+Date.now();
+        clients = [...clients, {...clientData, id: newId}];
+        added++;
+      }
+    }
+
+    renderClients("");
+    notify(`✅ ${added} clients importés, ${updated} mis à jour depuis Shopify`);
+  } catch(err) {
+    notify("❌ Erreur import clients : " + err.message);
+    console.error(err);
+  }
 }
 
 // ═══════════════════════════ RENDEZ-VOUS ════════════════════════════════════
