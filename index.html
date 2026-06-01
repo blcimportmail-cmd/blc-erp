@@ -2120,6 +2120,10 @@ async function loadShopifyOrders() {
       shopifyOrderNumber: o.order_number,
     }));
     shopifyConnected = true;
+    // Re-render dashboard with fresh Shopify data
+    // Re-render dashboard and ventes with fresh Shopify data
+    renderDashboard();
+    if(document.getElementById("ventes-body")) renderVentes();
 
     // Save Shopify orders to Supabase (upsert by shopify_order_id)
     for(const o of shopify){
@@ -2785,8 +2789,8 @@ async function loadAllData(){
     if(Array.isArray(ctr)&&ctr[0]) globalInvCounter=ctr[0].current_value||0;
     renderDashboard();
     notify("✅ Données chargées");
-    // Auto-charger les commandes Shopify
-    setTimeout(()=>loadShopifyOrders().then(()=>renderDashboard()).catch(e=>console.warn("Shopify:",e.message)), 500);
+    // Auto-charger les commandes Shopify immédiatement
+    loadShopifyOrders().then(()=>renderDashboard()).catch(e=>console.warn("Shopify:",e.message));
   } catch(e){
     console.error("loadAllData error",e);
     notify("⚠ Chargement local (Supabase non connecté)");
