@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head> 
+<head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BLC Import — ERP Pro</title>
@@ -319,11 +319,25 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
   <div class="page" id="page-factures">
     <div class="page-hdr">
       <div><div class="page-title">Factures</div><div class="page-sub" id="fac-sub">Numérotation séquentielle automatique</div></div>
-      <button class="btn btn-primary" onclick="openCreateInvoice()">+ Créer une facture</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-sm" id="fv-individual" onclick="setFacturesView('individual')" style="background:var(--orange-pale);color:var(--orange);border:1.5px solid var(--orange);font-weight:700">📄 Factures</button>
+          <button class="btn btn-sm btn-secondary" id="fv-payouts" onclick="setFacturesView('payouts')">💳 Virements</button>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateInvoice()">+ Créer une facture</button>
+      </div>
     </div>
     <div class="tbl-wrap">
       <table><thead><tr><th>N° Facture</th><th>Client</th><th>Produit</th><th>Montant TTC</th><th>Date</th><th>Source</th><th>Actions</th></tr></thead>
       <tbody id="inv-body"><tr><td colspan="7" class="empty-state">Aucune facture</td></tr></tbody></table>
+    </div>
+    <!-- Virements view -->
+    <div id="payouts-wrap" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:12px;color:var(--muted)" id="payouts-sub">—</div>
+        <button class="btn btn-sm btn-secondary" onclick="loadPayouts()">🔄 Actualiser</button>
+      </div>
+      <div id="payouts-list"></div>
     </div>
   </div>
 
@@ -399,6 +413,8 @@ let allUsers = [
 let todoFilter = "all"; // all | mine | global
 let stockFilter = "local"; // local | livraison | preparation | all
 let rdvFilter = "week"; // day | week | month | all
+let payouts = []; // Shopify Payments virements
+let facturesView = "individual"; // individual | payouts
 let rdvList = []; // [{id,title,date,time,endTime,client,notes,source}]
 
 // ═══════════════════════════ STATE ═══════════════════════════════════════════
@@ -1106,6 +1122,11 @@ function deleteCharge(id){if(!confirm("Supprimer ?"))return;charges=charges.filt
 
 // ═══════════════════════════ FACTURES ════════════════════════════════════════
 function renderFactures(){
+  // Reset to individual view if needed
+  if(facturesView==="payouts"){
+    document.getElementById("inv-body").closest(".tbl-wrap").style.display="none";
+    document.getElementById("payouts-wrap").style.display="block";
+  }
   resequenceInvoices();
   const all=[...sales.map(s=>({...s,type:"manual"})),...shopify.map(s=>({...s,type:"shopify"}))].sort((a,b)=>(a.globalSeq||0)-(b.globalSeq||0));
   const total=all.filter(i=>i.status!=="refunded").reduce((s,v)=>s+v.totalTTC,0);
@@ -2720,6 +2741,106 @@ async function saveSupplier(s){
 async function saveCompanyInfo(){
   const ci=companyInfo;
   await dbPatch("company_info",{id:1,name:ci.name,legal_form:ci.legalForm,address:ci.address,zip_city:ci.zipCity,siret:ci.siret,tva_intra:ci.tvaIntra,capital:ci.capital,rcs:ci.rcs,email:ci.email,phone:ci.phone,website:ci.website,iban:ci.iban,bic:ci.bic,bank:ci.bank,payment_terms:ci.paymentTerms,late_interest:ci.lateInterest,recovery_fee:ci.recoveryFee});
+}
+
+// ═══════════════════════════ FACTURES — VIREMENTS ════════════════════════════
+function setFacturesView(view){
+  facturesView=view;
+  ["individual","payouts"].forEach(k=>{
+    const b=document.getElementById("fv-"+k);if(!b)return;
+    b.className="btn btn-sm btn-secondary";
+    b.style.background="";b.style.color="";b.style.border="";b.style.fontWeight="";
+  });
+  const b=document.getElementById("fv-"+view);
+  if(b){b.className="btn btn-sm";b.style.background="var(--orange-pale)";b.style.color="var(--orange)";b.style.border="1.5px solid var(--orange)";b.style.fontWeight="700";}
+  document.getElementById("inv-body").closest(".tbl-wrap").style.display=view==="individual"?"block":"none";
+  document.getElementById("payouts-wrap").style.display=view==="payouts"?"block":"none";
+  if(view==="payouts") loadPayouts();
+}
+
+async function loadPayouts(){
+  document.getElementById("payouts-list").innerHTML=`<div style="padding:30px;text-align:center;color:var(--muted)">⏳ Chargement des virements…</div>`;
+  try {
+    const data = await shopifyFetch("/shopify_payments/payouts.json?limit=50");
+    payouts = data.payouts || [];
+    renderPayouts();
+  } catch(err) {
+    document.getElementById("payouts-list").innerHTML=`<div style="padding:30px;text-align:center;color:var(--red)">❌ Erreur : ${err.message}<br/><span style="font-size:12px;color:var(--muted)">Vérifiez que la permission read_shopify_payments_payouts est activée</span></div>`;
+  }
+}
+
+async function loadPayoutOrders(payoutId, containerId){
+  const el=document.getElementById(containerId);
+  if(el.dataset.loaded==="true"){
+    el.style.display=el.style.display==="none"?"block":"none";
+    return;
+  }
+  el.innerHTML=`<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px">⏳ Chargement…</div>`;
+  el.style.display="block";
+  try {
+    const data = await shopifyFetch(`/shopify_payments/payouts/${payoutId}/transactions.json?limit=250`);
+    const txns = data.transactions || [];
+    // Match transactions to our shopify orders
+    const orderTxns = txns.filter(t=>t.type==="payout" || t.source_type==="order");
+    const rows = txns.filter(t=>t.source_type==="order").map(t=>{
+      const order = shopify.find(o=>String(o.shopifyOrderId)===String(t.source_id));
+      return `<tr style="border-bottom:1px solid #f7f8fc">
+        <td style="padding:9px 14px;font-family:monospace;font-size:11px;color:var(--orange)">${order?.invoiceNum||"—"}</td>
+        <td style="padding:9px 14px;font-size:12px;font-weight:600">${order?.client||t.source_id}</td>
+        <td style="padding:9px 14px;font-size:12px;color:var(--muted)">${order?.product||"—"}</td>
+        <td style="padding:9px 14px;font-size:12px;color:var(--muted)">${order?.date?fmtDate(order.date):"—"}</td>
+        <td style="padding:9px 14px;font-size:12px;font-weight:700;color:var(--green)">${fmtEur(parseFloat(t.amount||0))}</td>
+        ${order?`<td style="padding:9px 14px"><button class="btn btn-sm btn-ghost" onclick="dlInvoice('${order.id}')">🧾</button></td>`:`<td></td>`}
+      </tr>`;
+    }).join("");
+    el.innerHTML=rows?`<table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:#f7f8fc">
+        <th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;text-align:left">N° Facture</th>
+        <th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;text-align:left">Client</th>
+        <th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;text-align:left">Produit</th>
+        <th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;text-align:left">Date</th>
+        <th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;text-align:left">Montant</th>
+        <th style="padding:8px 14px"></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`:`<div style="padding:14px;text-align:center;color:var(--light);font-size:12px">Aucune commande trouvée dans ce virement</div>`;
+    el.dataset.loaded="true";
+  } catch(err) {
+    el.innerHTML=`<div style="padding:14px;color:var(--red);font-size:12px">Erreur: ${err.message}</div>`;
+  }
+}
+
+function renderPayouts(){
+  const STATUS_COLORS={paid:{bg:"var(--green-pale)",color:"var(--green)",label:"Viré"},in_transit:{bg:"var(--blue-pale)",color:"var(--blue)",label:"En transit"},pending:{bg:"var(--yellow-pale)",color:"var(--yellow)",label:"En attente"},failed:{bg:"var(--red-pale)",color:"var(--red)",label:"Échoué"},canceled:{bg:"#f0f0f5",color:"var(--muted)",label:"Annulé"}};
+  const total=payouts.filter(p=>p.status==="paid").reduce((s,p)=>s+parseFloat(p.amount||0),0);
+  document.getElementById("payouts-sub").textContent=`${payouts.length} virement${payouts.length>1?"s":" "} · Total viré : ${fmtEur(total)}`;
+
+  if(!payouts.length){
+    document.getElementById("payouts-list").innerHTML=`<div style="padding:60px;text-align:center;color:var(--light)">Aucun virement Shopify Payments trouvé</div>`;
+    return;
+  }
+
+  document.getElementById("payouts-list").innerHTML=payouts.map((p,i)=>{
+    const sc=STATUS_COLORS[p.status]||STATUS_COLORS.pending;
+    const containerId=`payout-orders-${i}`;
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:12px;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;cursor:pointer" onclick="loadPayoutOrders(${p.id},'${containerId}')">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${sc.color}"></div>
+          <div>
+            <div style="font-weight:700;color:var(--navy)">${fmtDate(p.date)}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Virement #${p.id} · ${p.currency||"EUR"}</div>
+          </div>
+          <span style="background:${sc.bg};color:${sc.color};padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700">${sc.label}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div style="font-size:20px;font-weight:900;color:${p.status==="paid"?"var(--green)":"var(--muted)"}">${fmtEur(parseFloat(p.amount||0))}</div>
+          <span style="color:var(--light);font-size:18px">▾</span>
+        </div>
+      </div>
+      <div id="${containerId}" style="display:none;border-top:1px solid var(--border);background:#fafbfd"></div>
+    </div>`;
+  }).join("");
 }
 
 // ═══════════════════════════ RENDEZ-VOUS ════════════════════════════════════
