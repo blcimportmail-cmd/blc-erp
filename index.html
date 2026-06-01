@@ -738,17 +738,23 @@ function renderAchats(){
 function toggleSortAchats(){sortAchats=sortAchats==="date_desc"?"date_asc":"date_desc";renderAchats();}
 function changeStatus(id,newStatus){
   const prev=purchases.find(p=>String(p.id)===String(id));if(!prev)return;
-  if(prev.stockStatus===newStatus)return; // no change
+  if(prev.stockStatus===newStatus)return;
   const wasLocal=prev.stockStatus==="local",becomesLocal=newStatus==="local";
   if(!wasLocal&&becomesLocal)addStockFromPurchase(prev);
   else if(wasLocal&&!becomesLocal)removeStockFromPurchase(prev);
   purchases=purchases.map(p=>String(p.id)===String(id)?{...p,stockStatus:newStatus}:p);
   renderAchats();
   notify(`✅ ${STATUS[newStatus]?.icon} ${STATUS[newStatus]?.label}`);
-  const updatedP=purchases.find(p=>String(p.id)===String(id));
-  if(updatedP) dbPatch("purchases",{id:updatedP.id,stock_status:newStatus});
-  const lns=updatedP?._lines||[];
-  lns.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l.linkedStockId));if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:new Date().toISOString().split("T")[0]});}});
+  dbPatch("purchases",{id,stock_status:newStatus});
+  // Save stock AFTER PMP calculation (addStockFromPurchase already updated stock array)
+  const lns=prev._lines&&prev._lines.length?prev._lines:[{linkedStockId:prev.linkedStockId}];
+  const savedIds=new Set();
+  lns.forEach(l=>{
+    if(!l.linkedStockId||savedIds.has(String(l.linkedStockId)))return;
+    savedIds.add(String(l.linkedStockId));
+    const s=stock.find(x=>String(x.id)===String(l.linkedStockId));
+    if(s) setTimeout(()=>dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:new Date().toISOString().split("T")[0]}),100);
+  });
 }
 function addStockFromPurchase(p){
   const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,qty:p.qty,unitHT:p.unitHT||0}];
@@ -1399,12 +1405,14 @@ function submitPurchase(){
   // Save updated stock to DB after PMP calculation
   if(status==="local"){
     const savedIds=new Set();
-    lines.forEach(l=>{
-      if(!l.linkedStockId||savedIds.has(String(l.linkedStockId)))return;
-      savedIds.add(String(l.linkedStockId));
-      const s=stock.find(x=>String(x.id)===String(l.linkedStockId));
-      if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:np.date});
-    });
+    setTimeout(()=>{
+      lines.forEach(l=>{
+        if(!l.linkedStockId||savedIds.has(String(l.linkedStockId)))return;
+        savedIds.add(String(l.linkedStockId));
+        const s=stock.find(x=>String(x.id)===String(l.linkedStockId));
+        if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:np.date});
+      });
+    },100);
   }
   // Save new products created during purchase
   lines.forEach(l=>{if(l.linkedStockId&&String(l.linkedStockId).startsWith("tmp-")){const s=stock.find(x=>String(x.id)===String(l.linkedStockId));if(s){dbPost("stock",{name:s.name,qty:s.qty,reserved:0,unit_cost_ht:s.unitCostHT,shopify_linked:false,last_update:np.date}).then(r=>{if(r&&r[0]){const realId=r[0].id;stock=stock.map(x=>String(x.id)===String(l.linkedStockId)?{...x,id:realId}:x);l.linkedStockId=realId;}});}}});
