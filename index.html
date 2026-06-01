@@ -2473,13 +2473,14 @@ function rowToSale(r){return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.globa
 function rowToPurchase(r){return {id:r.id,supplier:r.supplier_name,supplierId:r.supplier_id,description:r.description,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),amountHT:parseFloat(r.amount_ht||0),date:r.date,hasInvoice:r.has_invoice,invoiceFile:r.invoice_file,stockStatus:r.stock_status,linkedStockId:r.linked_stock_id};}
 function rowToCharge(r){return {id:r.id,name:r.name,type:r.type,category:r.category,amountHT:parseFloat(r.amount_ht||0),period:r.period,note:r.note,active:r.active!==false};}
 function rowToTodo(r){return {id:r.id,title:r.title,description:r.description,assigned_to:r.assigned_to,created_by:r.created_by,due_date:r.due_date,priority:r.priority||"normal",status:r.status||"todo",is_global:r.is_global,created_at:r.created_at};}
+function rowToRdv(r){return {id:r.id,title:r.title,date:r.date,time:r.time?r.time.slice(0,5):null,endTime:r.end_time?r.end_time.slice(0,5):null,clientId:r.client_id,clientName:r.client_name||"",notes:r.notes||"",source:r.source||"manual",createdBy:r.created_by};}
 function rowToSupplier(r){return {id:r.id,name:r.name,contact:r.contact||"",email:r.email||"",phone:r.phone||""};}
 
 // Load all data from Supabase
 async function loadAllData(){
   notify("⏳ Chargement des données…");
   try {
-    const [cls,stk,sls,purch,chrgs,todos_,sups,cmpny,usrs] = await Promise.all([
+    const [cls,stk,sls,purch,chrgs,todos_,sups,cmpny,usrs,rdvs] = await Promise.all([
       dbGet("clients","order=name"),
       dbGet("stock","order=name"),
       dbGet("sales","order=created_at.desc"),
@@ -2489,6 +2490,7 @@ async function loadAllData(){
       dbGet("suppliers","order=name"),
       dbGet("company_info","id=eq.1"),
       dbGet("blc_users","select=id,username,display_name,role,avatar_color"),
+      dbGet("rdv","order=date.desc,time.desc"),
     ]);
     clients   = Array.isArray(cls)   ? cls.map(rowToClient)     : [];
     stock     = Array.isArray(stk)   ? stk.map(rowToStock)      : [];
@@ -2497,6 +2499,8 @@ async function loadAllData(){
     charges   = Array.isArray(chrgs) ? chrgs.map(rowToCharge)   : [];
     todos     = Array.isArray(todos_)? todos_.map(rowToTodo)     : [];
     suppliers = Array.isArray(sups)  ? sups.map(rowToSupplier)  : [];
+    if(Array.isArray(rdvs)) rdvList=rdvs.map(rowToRdv);
+
     // Update allUsers with real Supabase UUIDs
     if(Array.isArray(usrs)&&usrs.length>0){
       allUsers=usrs.map(u=>({
@@ -2689,11 +2693,25 @@ async function submitRdv(){
     notes:document.getElementById("rdv-notes").value.trim(),
     source:"manual",
   };
+  const row={
+    title:r.title,
+    date:r.date,
+    time:r.time||null,
+    end_time:r.endTime||null,
+    client_id:r.clientId||null,
+    client_name:r.clientName||null,
+    notes:r.notes||null,
+    source:"manual",
+    created_by:currentUser?.id||null,
+  };
   if(id&&id!=="null"){
     rdvList=rdvList.map(x=>String(x.id)===String(id)?{...x,...r}:x);
-    dbPatch("todos",{id}); // placeholder — will use rdv table when created
+    dbPatch("rdv",{id,...row});
   } else {
     rdvList=[r,...rdvList];
+    dbPost("rdv",row).then(res=>{
+      if(res&&res[0]){const newId=res[0].id;r.id=newId;rdvList=rdvList.map(x=>x.id===r.id?{...x,id:newId}:x);}
+    });
   }
   closeModal();renderRdv();
   notify(`📅 RDV "${title}" ${id?"mis à jour":"créé"}`);
@@ -2702,6 +2720,7 @@ async function submitRdv(){
 function deleteRdv(id){
   if(!confirm("Supprimer ce rendez-vous ?"))return;
   rdvList=rdvList.filter(x=>String(x.id)!==String(id));
+  dbDelete("rdv",id);
   renderRdv();notify("🗑 RDV supprimé");
 }
 
