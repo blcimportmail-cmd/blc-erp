@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head> 
+<head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BLC Import — ERP Pro</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<style> 
+<style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{ 
+:root{
   --navy:#0F1535;--orange:#F47920;--orange-pale:#fff4ec;
   --bg:#f2f3f7;--card:#ffffff;--border:#e4e6ef;
   --muted:#7a7f96;--light:#b0b4c8;
@@ -2412,7 +2412,7 @@ JSON attendu:
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
-        model:"claude-sonnet-4-20250514",
+        model:"claude-sonnet-4-5",
         max_tokens:1500,
         messages:[{role:"user",content:prompt}]
       })
