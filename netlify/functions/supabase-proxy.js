@@ -1,7 +1,5 @@
-// Fonction Netlify — proxy sécurisé vers Supabase
 const SUPABASE_URL = process.env.SUPAURL;
 const SUPABASE_KEY = process.env.SUPA_SERVICE_KEY;
-const crypto = require("crypto");
 
 async function supabaseRequest(path, method = "GET", body = null) {
   const url = `${SUPABASE_URL}/rest/v1/${path}`;
@@ -30,24 +28,36 @@ exports.handler = async (event) => {
 
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers, body: "" };
 
-  // Clean path — remove all prefixes
   let path = event.path
     .replace("/.netlify/functions/supabase-proxy", "")
     .replace("/api/supabase", "");
 
-  // Add query string back if present
   if (event.rawQuery) path = path + "?" + event.rawQuery;
 
   const body = event.body ? (() => { try { return JSON.parse(event.body); } catch(e) { return {}; } })() : {};
 
-  console.log("supabase-proxy path:", path, "method:", event.httpMethod);
-
   if (!SUPABASE_URL || !SUPABASE_KEY) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: "Variables d'environnement manquantes: SUPAURL ou SUPA_SERVICE_KEY" }) };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: "Variables manquantes: SUPAURL ou SUPA_SERVICE_KEY" }) };
   }
 
   try {
-    // ─── DATA CRUD ───────────────────────────────────────────
+    // ─── RPC (fonctions SQL) ────────────────────────────────────
+    if (path.startsWith("/rpc/")) {
+      const funcName = path.replace("/rpc/", "").split("?")[0];
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${funcName}`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json();
+      return { statusCode: 200, headers, body: JSON.stringify(result) };
+    }
+
+    // ─── DATA CRUD ──────────────────────────────────────────────
     if (path.startsWith("/data/")) {
       const rawTable = path.replace("/data/", "");
       const table = rawTable.split("?")[0];
@@ -74,7 +84,7 @@ exports.handler = async (event) => {
       }
     }
 
-    // ─── INVOICE COUNTER ─────────────────────────────────────
+    // ─── INVOICE ────────────────────────────────────────────────
     if (path.startsWith("/invoice/next")) {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/next_invoice_number`, {
         method: "POST",
@@ -87,7 +97,6 @@ exports.handler = async (event) => {
 
     return { statusCode: 404, headers, body: JSON.stringify({ error: "Route inconnue: " + path }) };
   } catch (err) {
-    console.error("supabase-proxy error:", err);
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
   }
 };
