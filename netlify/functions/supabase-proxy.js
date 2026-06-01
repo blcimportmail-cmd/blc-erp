@@ -62,7 +62,7 @@ exports.handler = async (event) => {
       const rawTable = path.replace("/data/", "");
       const table = rawTable.split("?")[0];
       const query = rawTable.includes("?") ? rawTable.split("?")[1] : "";
-      const allowed = ["clients","stock","suppliers","purchases","sales","charges","todos","blc_users","company_info","invoice_counter"];
+      const allowed = ["clients","stock","suppliers","purchases","sales","charges","todos","blc_users","company_info","invoice_counter","rdv"];
       if (!allowed.includes(table)) return { statusCode: 403, headers, body: JSON.stringify({ error: "Table non autorisée: " + table }) };
 
       if (event.httpMethod === "GET") {
