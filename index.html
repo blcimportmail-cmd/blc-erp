@@ -788,7 +788,8 @@ function addStockFromPurchase(p){
       p_date:p.date
     });
   });
-  renderStock();
+  // Reload from DB to get accurate PMP from Supabase
+  setTimeout(reloadStock, 500);
 }
 function removeStockFromPurchase(p){
   if(p.stockStatus!=="local")return;
@@ -829,6 +830,11 @@ function openEditClient(id){
 }
 
 // ═══════════════════════════ STOCK ═══════════════════════════════════════════
+async function reloadStock(){
+  const data = await dbGet("stock","order=name");
+  if(Array.isArray(data)) stock=data.map(rowToStock);
+  renderStock();
+}
 function renderStock(){
   const total=stock.reduce((s,i)=>s+(i.unitCostHT||0)*i.qty,0);
   document.getElementById("stock-sub").textContent=`Valeur totale : ${fmtEur(total)} HT`;
@@ -1416,7 +1422,8 @@ function submitPurchase(){
   lines.forEach(l=>{if(l.linkedStockId&&String(l.linkedStockId).startsWith("tmp-")){const s=stock.find(x=>String(x.id)===String(l.linkedStockId));if(s){dbPost("stock",{name:s.name,qty:s.qty,reserved:0,unit_cost_ht:s.unitCostHT,shopify_linked:false,last_update:np.date}).then(r=>{if(r&&r[0]){const realId=r[0].id;stock=stock.map(x=>String(x.id)===String(l.linkedStockId)?{...x,id:realId}:x);l.linkedStockId=realId;}});}}});
   // Save new supplier if created
   if(supSel==="__new__"&&supplierId){const sup=suppliers.find(x=>String(x.id)===String(supplierId));if(sup)dbPost("suppliers",{name:sup.name,contact:sup.contact||null,email:sup.email||null,phone:sup.phone||null}).then(r=>{if(r&&r[0])sup.id=r[0].id;});}
-  closeModal();renderAchats();renderStock();
+  closeModal();renderAchats();
+  setTimeout(reloadStock, 500);
   notify(`✅ Achat enregistré · ${lines.length} produit${lines.length>1?"s":""} · ${fmtEur(totalHT)} HT`);
 }
 
