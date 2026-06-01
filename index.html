@@ -422,7 +422,7 @@ function calcBenefice(){
     const unitSaleHT=s.unitHT||(s.totalTTC/1.2/(s.qty||1));
     const qty=s.qty||1;
     let cost=0;
-    if(s.linkedStockId){const p=stock.find(x=>String(x.id)===String(s).linkedStockId);cost=p?.unitCostHT||0;}
+    if(s.linkedStockId){const p=stock.find(x=>String(x.id)===String(s.linkedStockId));cost=p?.unitCostHT||0;}
     else{const p=stock.find(x=>s.product.toLowerCase().includes(x.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));cost=p?.unitCostHT||0;}
     total+=qty*(unitSaleHT-cost);
   });
@@ -436,8 +436,8 @@ function resequenceInvoices(){
   all.forEach(item=>{
     seq++;
     const num=`FAC-${String(seq).padStart(3,"0")}`;
-    if(item._t==="manual") sales=sales.map(s=>String(s.id)===String(item).id?{...s,invoiceNum:num,globalSeq:seq}:s);
-    else shopify=shopify.map(s=>String(s.id)===String(item).id?{...s,invoiceNum:num,globalSeq:seq}:s);
+    if(item._t==="manual") sales=sales.map(s=>String(s.id)===String(item.id)?{...s,invoiceNum:num,globalSeq:seq}:s);
+    else shopify=shopify.map(s=>String(s.id)===String(item.id)?{...s,invoiceNum:num,globalSeq:seq}:s);
   });
   globalInvCounter=seq;
 }
@@ -617,7 +617,7 @@ function renderDashboard(){
     const unitSaleHT=s.unitHT||(s.totalTTC/1.2/(s.qty||1));
     const qty=s.qty||1;
     let cost=0;
-    if(s.linkedStockId){const p=stock.find(x=>String(x.id)===String(s).linkedStockId);cost=p?.unitCostHT||0;}
+    if(s.linkedStockId){const p=stock.find(x=>String(x.id)===String(s.linkedStockId));cost=p?.unitCostHT||0;}
     else{const p=stock.find(x=>(s.product||"").toLowerCase().includes(x.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));cost=p?.unitCostHT||0;}
     beneficeProduit+=qty*(unitSaleHT-cost);
   });
@@ -670,7 +670,7 @@ function calcBenefice(){
     const unitSaleHT=s.unitHT||(s.totalTTC/1.2/(s.qty||1));
     const qty=s.qty||1;
     let cost=0;
-    if(s.linkedStockId){const p=stock.find(x=>String(x.id)===String(s).linkedStockId);cost=p?.unitCostHT||0;}
+    if(s.linkedStockId){const p=stock.find(x=>String(x.id)===String(s.linkedStockId));cost=p?.unitCostHT||0;}
     else{const p=stock.find(x=>(s.product||"").toLowerCase().includes(x.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));cost=p?.unitCostHT||0;}
     total+=qty*(unitSaleHT-cost);
   });
@@ -710,7 +710,7 @@ function renderAchats(){
   document.getElementById("achats-date-th").innerHTML=`Date ${sortBtn}`;
   document.getElementById("achats-body").innerHTML=sorted.length===0?`<tr><td colspan="10" class="empty-state">Aucun achat enregistré</td></tr>`:sorted.map(p=>{
     const cfg=STATUS[p.stockStatus]||STATUS.preparation;
-    const linkedProd=p.linkedStockId?stock.find(s=>String(s.id)===String(p).linkedStockId):null;
+    const linkedProd=p.linkedStockId?stock.find(s=>String(s.id)===String(p.linkedStockId)):null;
     return `<tr>
       <td style="font-weight:700">${p.supplierId?`<span style="cursor:pointer;color:var(--navy)" onclick="openSupplierDetail('${p.supplierId}')">${p.supplier} <span style="color:var(--orange);font-size:11px">↗</span></span>`:p.supplier}</td>
       <td style="color:var(--muted)">${p.description}</td>
@@ -748,7 +748,7 @@ function changeStatus(id,newStatus){
   const updatedP=purchases.find(p=>String(p.id)===String(id));
   if(updatedP) dbPatch("purchases",{id:updatedP.id,stock_status:newStatus});
   const lns=updatedP?._lines||[];
-  lns.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l).linkedStockId);if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:new Date().toISOString().split("T")[0]});}});
+  lns.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l.linkedStockId));if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:new Date().toISOString().split("T")[0]});}});
 }
 function addStockFromPurchase(p){
   const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,qty:p.qty}];
@@ -756,7 +756,7 @@ function addStockFromPurchase(p){
     if(!l.linkedStockId)return;
     let found=false;
     stock=stock.map(s=>{
-      if(String(s.id)===String(l).linkedStockId){found=true;return {...s,qty:s.qty+l.qty,lastUpdate:p.date};}
+      if(String(s.id)===String(l.linkedStockId)){found=true;return {...s,qty:s.qty+l.qty,lastUpdate:p.date};}
       return s;
     });
     if(!found) console.warn("addStock: linkedStockId not found",l.linkedStockId,"in",stock.map(s=>s.id));
@@ -868,9 +868,9 @@ function deleteInvoice(id){
   if(!confirm("Supprimer cette facture ? Les numéros seront recalculés."))return;
   const s=sales.find(x=>String(x.id)===String(id));
   if(s){
-    if(s.linkedStockId)stock=stock.map(st=>String(st.id)===String(s).linkedStockId?{...st,qty:st.qty+(s.qty||0)}:st);
-    else{const m=stock.find(st=>s.product.toLowerCase().includes(st.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m)stock=stock.map(st=>String(st.id)===String(m).id?{...st,qty:st.qty+(s.qty||0)}:st);}
-    if(s.clientId)clients=clients.map(c=>String(c.id)===String(s).clientId?{...c,totalPurchases:Math.max(0,(c.totalPurchases||0)-s.totalTTC)}:c);
+    if(s.linkedStockId)stock=stock.map(st=>String(st.id)===String(s.linkedStockId)?{...st,qty:st.qty+(s.qty||0)}:st);
+    else{const m=stock.find(st=>s.product.toLowerCase().includes(st.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m)stock=stock.map(st=>String(st.id)===String(m.id)?{...st,qty:st.qty+(s.qty||0)}:st);}
+    if(s.clientId)clients=clients.map(c=>String(c.id)===String(s.clientId)?{...c,totalPurchases:Math.max(0,(c.totalPurchases||0)-s.totalTTC)}:c);
   }
   sales=sales.filter(x=>String(x.id)!==String(id));
   renderFactures();notify("🗑 Facture supprimée · stock et CA ajustés");
@@ -1181,12 +1181,12 @@ function submitSale(){
     if(stockItem?.shopifyVariantId) deductShopifyStock(stockItem, l.qty);
   });
 
-  if(clientObj)clients=clients.map(c=>String(c.id)===String(clientObj).id?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
+  if(clientObj)clients=clients.map(c=>String(c.id)===String(clientObj.id)?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
   // Save to Supabase
   const saleRow={invoice_num:ns.invoiceNum,global_seq:ns.globalSeq,client_id:ns.clientId||null,client_name:ns.client,product:ns.product,lines:ns._lines||[],qty:ns.qty,unit_ht:ns.unitHT,shipping:ns.shipping||0,total_ttc:ns.totalTTC,date:ns.date,source:"manual",linked_stock_id:ns.linkedStockId||null};
   dbPost("sales",saleRow).then(r=>{if(r&&r[0])ns.id=r[0].id;});
-  lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l).linkedStockId);if(s)dbPatch("stock",{id:s.id,qty:s.qty,unit_cost_ht:s.unitCostHT,last_update:ns.date,name:s.name,reserved:s.reserved||0,shopify_linked:s.shopifyLinked||false});}});
-  if(clientObj){const cl=clients.find(c=>String(c.id)===String(clientObj).id);if(cl)dbPatch("clients",{id:cl.id,total_purchases:cl.totalPurchases});}
+  lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l.linkedStockId));if(s)dbPatch("stock",{id:s.id,qty:s.qty,unit_cost_ht:s.unitCostHT,last_update:ns.date,name:s.name,reserved:s.reserved||0,shopify_linked:s.shopifyLinked||false});}});
+  if(clientObj){const cl=clients.find(c=>String(c.id)===String(clientObj.id));if(cl)dbPatch("clients",{id:cl.id,total_purchases:cl.totalPurchases});}
   closeModal();renderVentes();
   notify(`✅ Vente ${num} · ${lines.length} produit${lines.length>1?"s":""} · ${fmtEur(ttc)}`);
 }
@@ -1352,7 +1352,7 @@ function submitPurchase(){
     lines.forEach(l=>{
       if(!l.linkedStockId)return;
       stock=stock.map(s=>{
-        if(String(s.id)===String(l).linkedStockId){
+        if(String(s.id)===String(l.linkedStockId)){
           return {...s, qty: s.qty + l.qty, lastUpdate: date};
         }
         return s;
@@ -1363,7 +1363,7 @@ function submitPurchase(){
   // Save to Supabase
   const purchRow={supplier_id:np.supplierId||null,supplier_name:np.supplier,description:np.description,lines:np._lines||[],qty:np.qty,unit_ht:np.unitHT||0,amount_ht:np.amountHT,date:np.date,has_invoice:np.hasInvoice||false,invoice_file:np.invoiceFile||null,stock_status:np.stockStatus,linked_stock_id:np.linkedStockId||null};
   dbPost("purchases",purchRow).then(r=>{if(r&&r[0])np.id=r[0].id;});
-  if(status==="local") lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l).linkedStockId);if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:np.date});}});
+  if(status==="local") lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l.linkedStockId));if(s)dbPatch("stock",{id:s.id,name:s.name,qty:s.qty,reserved:s.reserved||0,unit_cost_ht:s.unitCostHT,shopify_linked:s.shopifyLinked||false,last_update:np.date});}});
   // Save new supplier if created
   if(supSel==="__new__"&&supplierId){const sup=suppliers.find(x=>String(x.id)===String(supplierId));if(sup)dbPost("suppliers",{name:sup.name,contact:sup.contact||null,email:sup.email||null,phone:sup.phone||null}).then(r=>{if(r&&r[0])sup.id=r[0].id;});}
   closeModal();renderAchats();renderStock();
@@ -1477,7 +1477,7 @@ function submitCharge(id){
     dbPatch("charges",{id,name:ch.name,type:ch.type,category:ch.category,amount_ht:ch.amountHT,period:ch.period,note:ch.note,active:ch.active});
   } else {
     const row={name:ch.name,type:ch.type,category:ch.category,amount_ht:ch.amountHT,period:ch.period,note:ch.note,active:ch.active};
-    dbPost("charges",row).then(r=>{const newId=r&&r[0]?r[0].id:ch.id;ch.id=newId;charges=[...charges.filter(x=>String(x.id)!==String(ch).id),ch];renderCharges();});
+    dbPost("charges",row).then(r=>{const newId=r&&r[0]?r[0].id:ch.id;ch.id=newId;charges=[...charges.filter(x=>String(x.id)!==String(ch.id)),ch];renderCharges();});
     charges=[...charges,ch];
   }
   closeModal();renderCharges();notify(`✅ Charge "${name}" ${id?"mise à jour":"créée"}`);
@@ -1573,7 +1573,7 @@ function submitCreateInvoice(){
   const num=nextFAC();
   const ns={id:Date.now(),invoiceNum:num,globalSeq:globalInvCounter,client:clientName,clientId:clientObj?.id||null,product:lines.map(l=>l.product).join(", "),qty:lines[0]?.qty||1,unitHT:lines[0]?.unitHT||0,shipping:ship,totalTTC:ttc,date,source:"manual",_lines:lines};
   sales=[ns,...sales];
-  if(clientObj)clients=clients.map(c=>String(c.id)===String(clientObj).id?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
+  if(clientObj)clients=clients.map(c=>String(c.id)===String(clientObj.id)?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
   const html=buildInvoiceHTML(num,clientObj,lines,date,ship);
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([html],{type:"text/html"}));a.download=`${num}-${clientName.replace(/\s/g,"_")}.html`;a.click();
   closeModal();renderFactures();notify(`🧾 Facture ${num} créée et téléchargée`);
@@ -1851,10 +1851,10 @@ function applyDicta(jsonStr){
     const num=nextFAC();
     sales=[{id:Date.now(),invoiceNum:num,globalSeq:globalInvCounter,client:clientName,product:result.sale.product,qty:result.sale.qty||1,unitHT:result.sale.unitHT||0,shipping:result.sale.shipping||0,totalTTC:result.sale.totalTTC,date:new Date().toISOString().split("T")[0],source:"manual"},...sales];
     const m=stock.find(s=>s.name.toLowerCase().includes((result.sale.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));
-    if(m)stock=stock.map(s=>String(s.id)===String(m).id?{...s,qty:Math.max(0,s.qty-(result.sale.qty||1))}:s);
+    if(m)stock=stock.map(s=>String(s.id)===String(m.id)?{...s,qty:Math.max(0,s.qty-(result.sale.qty||1))}:s);
     msgs.push(`Vente ${num}`);
   }
-  if(result.stock?.product&&result.stock?.qty){const m=stock.find(s=>s.name.toLowerCase().includes((result.stock.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m){stock=stock.map(s=>String(s.id)===String(m).id?{...s,qty:s.qty+result.stock.qty}:s);msgs.push(`Stock +${result.stock.qty}`);}}
+  if(result.stock?.product&&result.stock?.qty){const m=stock.find(s=>s.name.toLowerCase().includes((result.stock.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));if(m){stock=stock.map(s=>String(s.id)===String(m.id)?{...s,qty:s.qty+result.stock.qty}:s);msgs.push(`Stock +${result.stock.qty}`);}}
   if(result.purchaseStatus?.supplier&&result.purchaseStatus?.newStatus){const m=purchases.find(p=>p.supplier.toLowerCase().includes((result.purchaseStatus.supplier||"").toLowerCase()));if(m){changeStatus(m.id,result.purchaseStatus.newStatus,{className:""});msgs.push("Statut mis à jour");}}
   closeModal();
   const active=document.querySelector(".nav-item.active");
@@ -1953,8 +1953,8 @@ function renderTodo(){
   document.getElementById("todo-board").innerHTML=Object.entries(STATUS_CONFIG).map(([status,cfg])=>{
     const items=cols[status]||[];
     const pCfg=t=>PRIORITY_CONFIG[t.priority]||PRIORITY_CONFIG.normal;
-    const assignedUser=t=>allUsers.find(u=>String(u.id)===String(t).assigned_to);
-    const creatorUser=t=>allUsers.find(u=>String(u.id)===String(t).created_by);
+    const assignedUser=t=>allUsers.find(u=>String(u.id)===String(t.assigned_to));
+    const creatorUser=t=>allUsers.find(u=>String(u.id)===String(t.created_by));
     return `<div class="todo-col">
       <div class="todo-col-hdr" style="color:${cfg.color}">
         <span>${cfg.icon} ${cfg.label}</span>
@@ -2020,8 +2020,8 @@ function openAddTodo(defaultStatus){
 
 function openTodoDetail(t){
   if(typeof t==="string")t=JSON.parse(t);
-  const assignedUser=allUsers.find(u=>String(u.id)===String(t).assigned_to);
-  const creator=allUsers.find(u=>String(u.id)===String(t).created_by);
+  const assignedUser=allUsers.find(u=>String(u.id)===String(t.assigned_to));
+  const creator=allUsers.find(u=>String(u.id)===String(t.created_by));
   const userOpts=allUsers.map(u=>`<option value="${u.id}" ${t.assigned_to===u.id?"selected":""}>${u.display_name}</option>`).join("");
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <input type="hidden" id="td-id" value="${t.id}"/>
@@ -2083,10 +2083,10 @@ function submitTodo(id){
     dbPatch("todos",{id,...row});
   } else {
     todos=[t,...todos];
-    dbPost("todos",row).then(r=>{const newId=r&&r[0]?r[0].id:t.id;t.id=newId;todos=todos.map(x=>String(x.id)===String(t).id?{...x,id:newId}:x);});
+    dbPost("todos",row).then(r=>{const newId=r&&r[0]?r[0].id:t.id;t.id=newId;todos=todos.map(x=>String(x.id)===String(t.id)?{...x,id:newId}:x);});
   }
   closeModal();renderTodo();
-  notify(`✅ Tâche "${title}" ${id?"mise à jour":"créée"}${t.assigned_to?` → ${allUsers.find(u=>String(u.id)===String(t).assigned_to)?.display_name}`:" (globale)"}`);
+  notify(`✅ Tâche "${title}" ${id?"mise à jour":"créée"}${t.assigned_to?` → ${allUsers.find(u=>String(u.id)===String(t.assigned_to))?.display_name}`:" (globale)"}`);
 }
 
 function deleteTodo(id){
