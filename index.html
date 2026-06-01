@@ -752,16 +752,22 @@ function changeStatus(id,newStatus){
 }
 function addStockFromPurchase(p){
   const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,qty:p.qty,unitHT:p.unitHT||0}];
+  // Group lines by product to handle multiple lines for same product
+  const grouped={};
   lines.forEach(l=>{
     if(!l.linkedStockId)return;
+    const key=String(l.linkedStockId);
+    if(!grouped[key]) grouped[key]={linkedStockId:l.linkedStockId,totalQty:0,totalValue:0};
+    grouped[key].totalQty+=l.qty;
+    grouped[key].totalValue+=l.qty*(l.unitHT||0);
+  });
+  Object.values(grouped).forEach(g=>{
     stock=stock.map(s=>{
-      if(String(s.id)===String(l.linkedStockId)){
+      if(String(s.id)===String(g.linkedStockId)){
         const oldQty=s.qty||0;
-        const newQty=oldQty+l.qty;
-        // Prix moyen pondéré (PMP)
-        const oldCost=s.unitCostHT||0;
-        const newCost=l.unitHT||0;
-        const pmp=newQty>0?((oldQty*oldCost)+(l.qty*newCost))/newQty:newCost;
+        const newQty=oldQty+g.totalQty;
+        const newAvgCost=g.totalQty>0?g.totalValue/g.totalQty:0;
+        const pmp=newQty>0?((oldQty*(s.unitCostHT||0))+(g.totalQty*newAvgCost))/newQty:newAvgCost;
         return {...s,qty:newQty,unitCostHT:parseFloat(pmp.toFixed(4)),lastUpdate:p.date};
       }
       return s;
@@ -1353,15 +1359,25 @@ function submitPurchase(){
   };
   purchases=[np,...purchases];
 
-  // If status is "local", add directly to stock right now (no function indirection)
+  // If status is "local", add directly to stock right now
+  // Group lines by linkedStockId first to handle multiple lines for same product
   if(status==="local"){
+    const grouped={};
     lines.forEach(l=>{
       if(!l.linkedStockId)return;
+      const key=String(l.linkedStockId);
+      if(!grouped[key]) grouped[key]={linkedStockId:l.linkedStockId,totalQty:0,totalValue:0};
+      grouped[key].totalQty+=l.qty;
+      grouped[key].totalValue+=l.qty*(l.unitHT||0);
+    });
+    Object.values(grouped).forEach(g=>{
       stock=stock.map(s=>{
-        if(String(s.id)===String(l.linkedStockId)){
+        if(String(s.id)===String(g.linkedStockId)){
           const oldQty=s.qty||0;
-          const newQty=oldQty+l.qty;
-          const pmp=newQty>0?((oldQty*(s.unitCostHT||0))+(l.qty*(l.unitHT||0)))/newQty:(l.unitHT||0);
+          const newQty=oldQty+g.totalQty;
+          // PMP: (ancien stock × ancien coût + total nouvelles pièces × coût moyen nouvelles pièces) / total
+          const newAvgCost=g.totalQty>0?g.totalValue/g.totalQty:0;
+          const pmp=newQty>0?((oldQty*(s.unitCostHT||0))+(g.totalQty*newAvgCost))/newQty:newAvgCost;
           return {...s,qty:newQty,unitCostHT:parseFloat(pmp.toFixed(4)),lastUpdate:date};
         }
         return s;
