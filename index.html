@@ -2089,6 +2089,40 @@ function getFilteredTodos(){
   return filtered;
 }
 
+let _dragTodoId = null;
+
+function onTodoDragStart(e, id){
+  _dragTodoId = id;
+  e.dataTransfer.effectAllowed = "move";
+  e.currentTarget.style.opacity = "0.4";
+}
+function onTodoDragEnd(e){
+  e.currentTarget.style.opacity = "1";
+}
+function onTodoColDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  e.currentTarget.style.background = "rgba(244,121,32,0.06)";
+  e.currentTarget.style.borderColor = "var(--orange)";
+}
+function onTodoColDragLeave(e){
+  e.currentTarget.style.background = "";
+  e.currentTarget.style.borderColor = "";
+}
+function onTodoColDrop(e, newStatus){
+  e.preventDefault();
+  e.currentTarget.style.background = "";
+  e.currentTarget.style.borderColor = "";
+  if(!_dragTodoId) return;
+  const t = todos.find(x=>String(x.id)===String(_dragTodoId));
+  if(!t || t.status===newStatus) return;
+  todos = todos.map(x=>String(x.id)===String(_dragTodoId)?{...x,status:newStatus}:x);
+  dbPatch("todos",{id:_dragTodoId,status:newStatus});
+  _dragTodoId = null;
+  renderTodo();
+  notify(`✅ Tâche déplacée → ${STATUS_CONFIG[newStatus]?.label}`);
+}
+
 function renderTodo(){
   const filtered=getFilteredTodos();
   const total=filtered.length,done=filtered.filter(t=>t.status==="done").length;
@@ -2101,25 +2135,36 @@ function renderTodo(){
     const items=cols[status]||[];
     const pCfg=t=>PRIORITY_CONFIG[t.priority]||PRIORITY_CONFIG.normal;
     const assignedUser=t=>allUsers.find(u=>String(u.id)===String(t.assigned_to));
-    const creatorUser=t=>allUsers.find(u=>String(u.id)===String(t.created_by));
-    return `<div class="todo-col">
+    return `<div class="todo-col"
+      ondragover="onTodoColDragOver(event)"
+      ondragleave="onTodoColDragLeave(event)"
+      ondrop="onTodoColDrop(event,'${status}')"
+      style="transition:background 0.15s,border-color 0.15s">
       <div class="todo-col-hdr" style="color:${cfg.color}">
         <span>${cfg.icon} ${cfg.label}</span>
         <span style="background:#f0f0f5;color:var(--muted);padding:2px 8px;border-radius:10px;font-size:10px">${items.length}</span>
       </div>
-      <div style="padding:8px;min-height:100px">
-        ${items.length===0?`<div style="padding:20px 0;text-align:center;color:var(--light);font-size:12px">Aucune tâche</div>`:
-          items.sort((a,b)=>["urgent","high","normal","low"].indexOf(a.priority)-["urgent","high","normal","low"].indexOf(b.priority))
+      <div style="padding:8px;min-height:120px">
+        ${items.length===0?`<div style="padding:20px 0;text-align:center;color:var(--light);font-size:12px">Glisser une tâche ici</div>`:""}
+        ${items.sort((a,b)=>["urgent","high","normal","low"].indexOf(a.priority)-["urgent","high","normal","low"].indexOf(b.priority))
           .map(t=>`
-          <div class="todo-card todo-priority-${t.priority}" onclick="openTodoDetail(${JSON.stringify(t).replace(/"/g,"&quot;")})">
-            ${t.is_global?`<span style="font-size:9px;background:#e8eaf0;color:var(--muted);padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:1px">GLOBAL</span>`:""}
-            <div style="font-weight:700;font-size:13px;color:var(--navy);margin:4px 0">${t.title}</div>
+          <div class="todo-card todo-priority-${t.priority}"
+            draggable="true"
+            ondragstart="onTodoDragStart(event,'${t.id}')"
+            ondragend="onTodoDragEnd(event)"
+            onclick="openTodoDetail(${JSON.stringify(t).replace(/"/g,"&quot;")})"
+            style="cursor:grab;transition:opacity 0.15s">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+              ${t.is_global?`<span style="font-size:9px;background:#e8eaf0;color:var(--muted);padding:2px 6px;border-radius:4px;font-weight:700;letter-spacing:1px">GLOBAL</span>`:`<span></span>`}
+              <span style="font-size:14px;color:var(--light);cursor:grab">⠿</span>
+            </div>
+            <div style="font-weight:700;font-size:13px;color:var(--navy);margin-bottom:3px">${t.title}</div>
             ${t.description?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.description}</div>`:""}
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
               <span style="font-size:10px;font-weight:700;background:${pCfg(t).bg};color:${pCfg(t).color};padding:2px 7px;border-radius:10px">${pCfg(t).label}</span>
               <div style="display:flex;align-items:center;gap:4px">
                 ${t.due_date?`<span style="font-size:10px;color:var(--muted)">${fmtDate(t.due_date)}</span>`:""}
-                ${assignedUser(t)?`<div style="width:20px;height:20px;border-radius:5px;background:${assignedUser(t).avatar_color};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff">${assignedUser(t).display_name[0]}</div>`:""}
+                ${assignedUser(t)?`<div style="width:20px;height:20px;border-radius:5px;background:${assignedUser(t).avatar_color};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff" title="${assignedUser(t).display_name}">${assignedUser(t).display_name[0]}</div>`:""}
               </div>
             </div>
           </div>`).join("")}
@@ -2383,8 +2428,8 @@ function submitClientForm(){
   submitClient(id||null);
 }
 function submitTodoForm(){
-  const id=document.getElementById("td-id")?.value||null;
-  submitTodo(id||null);
+  const val=document.getElementById("td-id")?.value||"";
+  submitTodo(val&&val!=="null"&&val!==""?val:null);
 }
 
 // ═══════════════════════════ INIT ════════════════════════════════════════════
