@@ -471,7 +471,14 @@ function calcBenefice(){
 
 // ═══════════════════════════ FACTURE SÉQUENTIELLE ════════════════════════════
 function resequenceInvoices(){
-  const all=[...sales.map(s=>({...s,_t:"manual"})),...shopify.map(s=>({...s,_t:"shopify"}))].sort((a,b)=>new Date(a.date)-new Date(b.date)||(a.globalSeq||0)-(b.globalSeq||0));
+  const all=[
+    ...sales.map(s=>({...s,_t:"manual"})),
+    ...shopify.map(s=>({...s,_t:"shopify"}))
+  ].sort((a,b)=>{
+    const dateDiff=new Date(a.date)-new Date(b.date);
+    if(dateDiff!==0) return dateDiff;
+    return (a.globalSeq||0)-(b.globalSeq||0);
+  });
   let seq=0;
   all.forEach(item=>{
     seq++;
@@ -1987,8 +1994,35 @@ async function loadShopifyOrders() {
       shopifyOrderNumber: o.order_number,
     }));
     shopifyConnected = true;
+
+    // Save Shopify orders to Supabase (upsert by shopify_order_id)
+    for(const o of shopify){
+      // Check if already exists
+      const existing = await dbGet("sales", `shopify_order_id=eq.${o.shopifyOrderId}&select=id`);
+      const row = {
+        invoice_num: o.invoiceNum||"",
+        global_seq: o.globalSeq||0,
+        client_id: null,
+        client_name: o.client,
+        product: o.product,
+        lines: o.lineItems||[],
+        qty: o.qty||1,
+        unit_ht: o.unitHT||0,
+        shipping: 0,
+        total_ttc: o.totalTTC,
+        date: o.date,
+        source: "shopify",
+        shopify_order_id: String(o.shopifyOrderId),
+        linked_stock_id: null,
+      };
+      if(!existing||!existing.length){
+        const res = await dbPost("sales", row);
+        if(res&&res[0]) o.id = res[0].id;
+      }
+    }
+
     renderDashboard();
-    notify(`✅ ${orders.length} commandes Shopify chargées`);
+    notify(`✅ ${orders.length} commandes Shopify chargées et sauvegardées`);
   } catch (err) {
     notify("❌ Erreur Shopify : " + err.message);
     console.error(err);
@@ -2556,7 +2590,7 @@ async function dbDelete(table, id) {
 // Convert Supabase row → local format
 function rowToClient(r){return {id:r.id,name:r.name,address:r.address||"",zipCity:r.zip_city||"",siret:r.siret||"",tvaIntra:r.tva_intra||"",email:r.email||"",phone:r.phone||"",totalPurchases:parseFloat(r.total_purchases||0)};}
 function rowToStock(r){return {id:r.id,name:r.name,qty:r.qty||0,reserved:r.reserved||0,unitCostHT:parseFloat(r.unit_cost_ht||0),shopifyLinked:r.shopify_linked||false,shopifyProductId:r.shopify_product_id,shopifyVariantId:r.shopify_variant_id,shopifyMultiplier:r.shopify_multiplier||1,lastUpdate:r.last_update};}
-function rowToSale(r){return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id};}
+function rowToSale(r){return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id,shopifyOrderId:r.shopify_order_id};}
 function rowToPurchase(r){return {id:r.id,supplier:r.supplier_name,supplierId:r.supplier_id,description:r.description,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),amountHT:parseFloat(r.amount_ht||0),date:r.date,hasInvoice:r.has_invoice,invoiceFile:r.invoice_file,stockStatus:r.stock_status,linkedStockId:r.linked_stock_id};}
 function rowToCharge(r){return {id:r.id,name:r.name,type:r.type,category:r.category,amountHT:parseFloat(r.amount_ht||0),period:r.period,note:r.note,active:r.active!==false};}
 function rowToTodo(r){return {id:r.id,title:r.title,description:r.description,assigned_to:r.assigned_to,created_by:r.created_by,due_date:r.due_date,priority:r.priority||"normal",status:r.status||"todo",is_global:r.is_global,created_at:r.created_at};}
@@ -2581,7 +2615,9 @@ async function loadAllData(){
     ]);
     clients   = Array.isArray(cls)   ? cls.map(rowToClient)     : [];
     stock     = Array.isArray(stk)   ? stk.map(rowToStock)      : [];
-    sales     = Array.isArray(sls)   ? sls.map(rowToSale)       : [];
+    const allSalesData = Array.isArray(sls) ? sls.map(rowToSale) : [];
+    sales  = allSalesData.filter(s=>s.source!=="shopify");
+    shopify = allSalesData.filter(s=>s.source==="shopify");
     purchases = Array.isArray(purch) ? purch.map(rowToPurchase) : [];
     charges   = Array.isArray(chrgs) ? chrgs.map(rowToCharge)   : [];
     todos     = Array.isArray(todos_)? todos_.map(rowToTodo)     : [];
