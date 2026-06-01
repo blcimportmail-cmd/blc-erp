@@ -2269,13 +2269,27 @@ function submitTodo(id){
     is_global:!assigned,
     created_at:new Date().toISOString(),
   };
-  const row={title:t.title,description:t.description||null,assigned_to:t.assigned_to||null,created_by:t.created_by||null,due_date:t.due_date||null,priority:t.priority,status:t.status,is_global:t.is_global||false};
-  if(id){
+  // Only send valid UUIDs to Supabase (not local fake ids like "u1","u2")
+  const isValidUUID=v=>v&&/^[0-9a-f-]{36}$/i.test(String(v));
+  const row={
+    title:t.title,
+    description:t.description||null,
+    assigned_to:isValidUUID(t.assigned_to)?t.assigned_to:null,
+    created_by:isValidUUID(t.created_by)?t.created_by:null,
+    due_date:t.due_date||null,
+    priority:t.priority,
+    status:t.status,
+    is_global:t.is_global||false
+  };
+  if(id&&id!=="null"){
     todos=todos.map(x=>String(x.id)===String(id)?{...x,...t}:x);
-    dbPatch("todos",{id,...row});
+    dbPatch("todos",{id,...row}).then(r=>console.log("patch todo",r));
   } else {
     todos=[t,...todos];
-    dbPost("todos",row).then(r=>{const newId=r&&r[0]?r[0].id:t.id;t.id=newId;todos=todos.map(x=>String(x.id)===String(t.id)?{...x,id:newId}:x);});
+    dbPost("todos",row).then(r=>{
+      console.log("post todo result",r);
+      if(r&&r[0]){const newId=r[0].id;t.id=newId;todos=todos.map(x=>x.id===t.id?{...x,id:newId}:x);}
+    });
   }
   closeModal();renderTodo();
   notify(`✅ Tâche "${title}" ${id?"mise à jour":"créée"}${t.assigned_to?` → ${allUsers.find(u=>String(u.id)===String(t.assigned_to))?.display_name}`:" (globale)"}`);
@@ -2340,7 +2354,7 @@ function rowToSupplier(r){return {id:r.id,name:r.name,contact:r.contact||"",emai
 async function loadAllData(){
   notify("⏳ Chargement des données…");
   try {
-    const [cls,stk,sls,purch,chrgs,todos_,sups,cmpny] = await Promise.all([
+    const [cls,stk,sls,purch,chrgs,todos_,sups,cmpny,usrs] = await Promise.all([
       dbGet("clients","order=name"),
       dbGet("stock","order=name"),
       dbGet("sales","order=created_at.desc"),
@@ -2349,6 +2363,7 @@ async function loadAllData(){
       dbGet("todos","order=created_at.desc"),
       dbGet("suppliers","order=name"),
       dbGet("company_info","id=eq.1"),
+      dbGet("blc_users","select=id,username,display_name,role,avatar_color"),
     ]);
     clients   = Array.isArray(cls)   ? cls.map(rowToClient)     : [];
     stock     = Array.isArray(stk)   ? stk.map(rowToStock)      : [];
@@ -2357,6 +2372,24 @@ async function loadAllData(){
     charges   = Array.isArray(chrgs) ? chrgs.map(rowToCharge)   : [];
     todos     = Array.isArray(todos_)? todos_.map(rowToTodo)     : [];
     suppliers = Array.isArray(sups)  ? sups.map(rowToSupplier)  : [];
+    // Update allUsers with real Supabase UUIDs
+    if(Array.isArray(usrs)&&usrs.length>0){
+      allUsers=usrs.map(u=>({
+        id:u.id,
+        username:u.username,
+        display_name:u.display_name,
+        role:u.role,
+        avatar_color:u.avatar_color||"#F47920"
+      }));
+      // Also update currentUser id if logged in
+      if(currentUser){
+        const match=allUsers.find(u=>u.username===currentUser.username);
+        if(match){
+          currentUser={...currentUser,id:match.id};
+          sessionStorage.setItem("blc_user",JSON.stringify(currentUser));
+        }
+      }
+    }
     if(Array.isArray(cmpny)&&cmpny[0]){
       const ci=cmpny[0];
       companyInfo={name:ci.name||"BLC Import",legalForm:ci.legal_form||"SAS",address:ci.address||"",zipCity:ci.zip_city||"",siret:ci.siret||"",tvaIntra:ci.tva_intra||"",capital:ci.capital||"",rcs:ci.rcs||"",email:ci.email||"",phone:ci.phone||"",website:ci.website||"",iban:ci.iban||"",bic:ci.bic||"",bank:ci.bank||"",paymentTerms:ci.payment_terms||"30",lateInterest:ci.late_interest||"3 fois le taux légal",recoveryFee:ci.recovery_fee||"40"};
