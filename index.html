@@ -1711,6 +1711,11 @@ function submitStock(id){
     });
   }
   closeModal();renderStock();notify("✅ Stock mis à jour");
+  // Sync to Shopify if linked
+  const updatedItem = id&&id!=='null' ? stock.find(s=>String(s.id)===String(id)) : null;
+  if(updatedItem?.shopifyVariantId && updatedItem?.shopifyMultiplier) {
+    syncStockToShopify(updatedItem);
+  }
 }
 
 // ═══════════════════════════ MODALS — CHARGE ══════════════════════════════════
@@ -1917,6 +1922,16 @@ function submitCompanySettings(){
   dbPatch("company_info",{id:1,name:companyInfo.name,legal_form:companyInfo.legalForm,address:companyInfo.address,zip_city:companyInfo.zipCity,siret:companyInfo.siret,tva_intra:companyInfo.tvaIntra,capital:companyInfo.capital,rcs:companyInfo.rcs,email:companyInfo.email,phone:companyInfo.phone,website:companyInfo.website,iban:companyInfo.iban,bic:companyInfo.bic,bank:companyInfo.bank,payment_terms:companyInfo.paymentTerms,late_interest:companyInfo.lateInterest,recovery_fee:companyInfo.recoveryFee});
 }
 // ═══════════════════════════ SHOPIFY API ═════════════════════════════════════
+
+// Parse "100 Maillots de vélo" → {multiplier: 100, name: "Maillots de vélo"}
+function parseShopifyTitle(title) {
+  const match = title.trim().match(/^(\d+)\s+(.+)$/);
+  if (match) {
+    return { multiplier: parseInt(match[1]), name: match[2].trim() };
+  }
+  return { multiplier: 1, name: title.trim() };
+}
+
 // Toutes les requêtes Shopify passent par le proxy Netlify /api/shopify/
 // Le token est stocké côté serveur dans les variables d'environnement Netlify
 
@@ -1945,13 +1960,22 @@ async function loadShopifyOrders() {
       clientAddress: o.billing_address ? `${o.billing_address.address1}, ${o.billing_address.zip} ${o.billing_address.city}` : "",
       clientSiret: "",
       product: o.line_items.map(l => `${l.name} x${l.quantity}`).join(", "),
-      lineItems: o.line_items.map(l => ({
-        product: l.name,
-        qty: l.quantity,
-        unitHT: parseFloat((parseFloat(l.price) / 1.2).toFixed(4)),
-        totalHT: parseFloat((parseFloat(l.price) * l.quantity / 1.2).toFixed(2)),
-      })),
-      qty: o.line_items.reduce((s, l) => s + l.quantity, 0),
+      lineItems: o.line_items.map(l => {
+        const { multiplier, name } = parseShopifyTitle(l.name);
+        const realQty = l.quantity * multiplier;
+        return {
+          product: name,
+          qty: realQty,
+          shopifyLots: l.quantity,
+          shopifyMultiplier: multiplier,
+          unitHT: parseFloat((parseFloat(l.price) / multiplier / 1.2).toFixed(4)),
+          totalHT: parseFloat((parseFloat(l.price) * l.quantity / 1.2).toFixed(2)),
+        };
+      }),
+      qty: o.line_items.reduce((s, l) => {
+        const { multiplier } = parseShopifyTitle(l.name);
+        return s + l.quantity * multiplier;
+      }, 0),
       unitHT: parseFloat((parseFloat(o.subtotal_price) / 1.2 / Math.max(1, o.line_items.reduce((s,l)=>s+l.quantity,0))).toFixed(4)),
       totalTTC: parseFloat(o.total_price),
       date: o.created_at.split("T")[0],
@@ -1976,34 +2000,95 @@ async function loadShopifyStock() {
   try {
     const data = await shopifyFetch("/products.json?limit=250");
     const products = data.products || [];
-    // Fusionner avec le stock local
+
     products.forEach(p => {
+      const { multiplier, name } = parseShopifyTitle(p.title);
       p.variants.forEach(v => {
-        const existing = stock.find(s => s.shopifyVariantId === v.id || s.name.toLowerCase() === p.title.toLowerCase());
+        const lotQty = v.inventory_quantity || 0;
+        const realQty = lotQty * multiplier; // ex: 4 lots × 100 pcs = 400
+
+        // Try to find existing stock by shopifyVariantId or parsed name
+        const existing = stock.find(s =>
+          s.shopifyVariantId === v.id ||
+          s.name.toLowerCase() === name.toLowerCase()
+        );
+
         if (existing) {
           existing.shopifyProductId = p.id;
           existing.shopifyVariantId = v.id;
           existing.shopifyLinked = true;
-          if (v.inventory_quantity !== undefined) existing.shopifyQty = v.inventory_quantity;
+          existing.shopifyMultiplier = multiplier;
+          existing.qty = realQty;
+          existing.lastUpdate = new Date().toISOString().split("T")[0];
+          // Save updated stock to DB
+          dbPatch("stock", {
+            id: existing.id,
+            name: existing.name,
+            qty: realQty,
+            reserved: existing.reserved || 0,
+            unit_cost_ht: existing.unitCostHT || 0,
+            shopify_linked: true,
+            last_update: existing.lastUpdate
+          });
         } else if (v.inventory_management === "shopify") {
-          stock.push({
-            id: Date.now() + Math.random(),
-            name: p.variants.length > 1 ? `${p.title} — ${v.title}` : p.title,
-            qty: v.inventory_quantity || 0,
+          const newItem = {
+            id: "tmp-" + Date.now() + Math.random(),
+            name,
+            qty: realQty,
             reserved: 0,
             unitCostHT: 0,
             shopifyLinked: true,
             shopifyProductId: p.id,
             shopifyVariantId: v.id,
+            shopifyMultiplier: multiplier,
             lastUpdate: new Date().toISOString().split("T")[0],
+          };
+          stock.push(newItem);
+          // Save to DB
+          dbPost("stock", {
+            name,
+            qty: realQty,
+            reserved: 0,
+            unit_cost_ht: 0,
+            shopify_linked: true,
+            last_update: newItem.lastUpdate
+          }).then(r => {
+            if (r && r[0]) newItem.id = r[0].id;
           });
         }
       });
     });
     renderStock();
-    notify("✅ Stock Shopify synchronisé");
+    notify("✅ Stock Shopify synchronisé (quantités réelles)");
   } catch (err) {
     notify("❌ Erreur stock Shopify : " + err.message);
+  }
+}
+
+// Sync ERP stock quantity → Shopify (convert pieces to lots)
+async function syncStockToShopify(stockItem) {
+  if (!stockItem?.shopifyVariantId) return;
+  const multiplier = stockItem.shopifyMultiplier || 1;
+  const lotsQty = Math.floor(stockItem.qty / multiplier); // pieces → lots
+  try {
+    const variantData = await shopifyFetch(`/variants/${stockItem.shopifyVariantId}.json`);
+    const inventoryItemId = variantData.variant?.inventory_item_id;
+    if (!inventoryItemId) return;
+    const levelsData = await shopifyFetch(`/inventory_levels.json?inventory_item_ids=${inventoryItemId}`);
+    const level = levelsData.inventory_levels?.[0];
+    if (!level) return;
+    // Set absolute quantity (not adjust)
+    await shopifyFetch("/inventory_levels/set.json", {
+      method: "POST",
+      body: JSON.stringify({
+        location_id: level.location_id,
+        inventory_item_id: inventoryItemId,
+        available: lotsQty,
+      }),
+    });
+    notify(`✅ Shopify mis à jour : ${lotsQty} lots (${stockItem.qty} pcs)`);
+  } catch (err) {
+    notify("⚠ Stock ERP mis à jour, Shopify : " + err.message);
   }
 }
 
@@ -2020,15 +2105,17 @@ async function deductShopifyStock(stockItem, qty) {
     const level = levelsData.inventory_levels?.[0];
     if (!level) return;
 
+    const multiplier = stockItem.shopifyMultiplier || 1;
+    const lotsToDeduct = Math.ceil(qty / multiplier); // pieces → lots
     await shopifyFetch("/inventory_levels/adjust.json", {
       method: "POST",
       body: JSON.stringify({
         location_id: level.location_id,
         inventory_item_id: inventoryItemId,
-        available_adjustment: -qty,
+        available_adjustment: -lotsToDeduct,
       }),
     });
-    notify(`✅ Stock Shopify mis à jour (-${qty} unités)`);
+    notify(`✅ Stock Shopify mis à jour (-${lotsToDeduct} lots / -${qty} pcs)`);
   } catch (err) {
     notify("⚠ Stock local mis à jour, Shopify : " + err.message);
   }
@@ -2468,7 +2555,7 @@ async function dbDelete(table, id) {
 
 // Convert Supabase row → local format
 function rowToClient(r){return {id:r.id,name:r.name,address:r.address||"",zipCity:r.zip_city||"",siret:r.siret||"",tvaIntra:r.tva_intra||"",email:r.email||"",phone:r.phone||"",totalPurchases:parseFloat(r.total_purchases||0)};}
-function rowToStock(r){return {id:r.id,name:r.name,qty:r.qty||0,reserved:r.reserved||0,unitCostHT:parseFloat(r.unit_cost_ht||0),shopifyLinked:r.shopify_linked||false,shopifyProductId:r.shopify_product_id,shopifyVariantId:r.shopify_variant_id,lastUpdate:r.last_update};}
+function rowToStock(r){return {id:r.id,name:r.name,qty:r.qty||0,reserved:r.reserved||0,unitCostHT:parseFloat(r.unit_cost_ht||0),shopifyLinked:r.shopify_linked||false,shopifyProductId:r.shopify_product_id,shopifyVariantId:r.shopify_variant_id,shopifyMultiplier:r.shopify_multiplier||1,lastUpdate:r.last_update};}
 function rowToSale(r){return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id};}
 function rowToPurchase(r){return {id:r.id,supplier:r.supplier_name,supplierId:r.supplier_id,description:r.description,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),amountHT:parseFloat(r.amount_ht||0),date:r.date,hasInvoice:r.has_invoice,invoiceFile:r.invoice_file,stockStatus:r.stock_status,linkedStockId:r.linked_stock_id};}
 function rowToCharge(r){return {id:r.id,name:r.name,type:r.type,category:r.category,amountHT:parseFloat(r.amount_ht||0),period:r.period,note:r.note,active:r.active!==false};}
@@ -2542,7 +2629,7 @@ async function saveClient(clientObj){
   else await dbPatch("clients",{id:clientObj.id,...row});
 }
 async function saveStock(stockItem){
-  const row={name:stockItem.name,qty:stockItem.qty,reserved:stockItem.reserved||0,unit_cost_ht:stockItem.unitCostHT||0,shopify_linked:stockItem.shopifyLinked||false,shopify_product_id:stockItem.shopifyProductId||null,shopify_variant_id:stockItem.shopifyVariantId||null,last_update:stockItem.lastUpdate};
+  const row={name:stockItem.name,qty:stockItem.qty,reserved:stockItem.reserved||0,unit_cost_ht:stockItem.unitCostHT||0,shopify_linked:stockItem.shopifyLinked||false,shopify_product_id:stockItem.shopifyProductId||null,shopify_variant_id:stockItem.shopifyVariantId||null,shopify_multiplier:stockItem.shopifyMultiplier||1,last_update:stockItem.lastUpdate};
   if(stockItem._isNew){const r=await dbPost("stock",row);if(r&&r[0])stockItem.id=r[0].id;}
   else await dbPatch("stock",{id:stockItem.id,...row});
 }
