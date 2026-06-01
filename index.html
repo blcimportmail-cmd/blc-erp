@@ -246,8 +246,16 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
   <!-- VENTES -->
   <div class="page" id="page-ventes">
     <div class="page-hdr">
-      <div><div class="page-title">Ventes</div><div class="page-sub">Shopify + hors site · numérotation globale</div></div>
-      <button class="btn btn-primary" onclick="openAddSale()">+ Nouvelle vente</button>
+      <div><div class="page-title">Ventes</div><div class="page-sub" id="ventes-sub">Shopify + hors site</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-sm btn-secondary" id="vf-day"   onclick="setVentesFilter('day')">Aujourd'hui</button>
+          <button class="btn btn-sm btn-secondary" id="vf-week"  onclick="setVentesFilter('week')">Cette semaine</button>
+          <button class="btn btn-sm btn-secondary" id="vf-month" onclick="setVentesFilter('month')">Ce mois</button>
+          <button class="btn btn-sm" id="vf-all" onclick="setVentesFilter('all')" style="background:var(--orange-pale);color:var(--orange);border:1.5px solid var(--orange);font-weight:700">Tout</button>
+        </div>
+        <button class="btn btn-primary" onclick="openAddSale()">+ Nouvelle vente</button>
+      </div>
     </div>
     <div class="tbl-wrap">
       <table><thead><tr><th>N° Facture</th><th>Client</th><th>Produit</th><th>Qté</th><th>Montant TTC</th><th id="ventes-date-th" style="cursor:pointer">Date ↓</th><th>Source</th><th>Facture</th></tr></thead>
@@ -413,6 +421,7 @@ let allUsers = [
 ];
 let todoFilter = "all"; // all | mine | global
 let stockFilter = "local"; // local | livraison | preparation | all
+let ventesFilter = "all"; // all | day | week | month
 let rdvFilter = "week"; // day | week | month | all
 let payouts = []; // Shopify Payments virements
 let facturesView = "individual"; // individual | payouts
@@ -762,22 +771,56 @@ function calcBenefice(filteredSales){
 }
 
 // ═══════════════════════════ VENTES ══════════════════════════════════════════
+function setVentesFilter(f){
+  ventesFilter=f;
+  ["day","week","month","all"].forEach(k=>{
+    const b=document.getElementById("vf-"+k);if(!b)return;
+    b.className="btn btn-sm btn-secondary";
+    b.style.background="";b.style.color="";b.style.border="";b.style.fontWeight="";
+  });
+  const b=document.getElementById("vf-"+f);
+  if(b){b.className="btn btn-sm";b.style.background="var(--orange-pale)";b.style.color="var(--orange)";b.style.border="1.5px solid var(--orange)";b.style.fontWeight="700";}
+  renderVentes();
+}
+
+function getVentesFiltered(all){
+  const now=new Date(),today=isoDate(now);
+  if(ventesFilter==="day") return all.filter(s=>s.date===today);
+  if(ventesFilter==="week"){
+    const d=new Date(now);const day=d.getDay()||7;d.setDate(d.getDate()-day+1);
+    const from=isoDate(d);const d2=new Date(d);d2.setDate(d2.getDate()+6);const to=isoDate(d2);
+    return all.filter(s=>s.date>=from&&s.date<=to);
+  }
+  if(ventesFilter==="month"){
+    const from=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`;
+    const last=new Date(now.getFullYear(),now.getMonth()+1,0);
+    return all.filter(s=>s.date>=from&&s.date<=isoDate(last));
+  }
+  return all;
+}
+
 function renderVentes(){
   let all=[...sales,...shopify];
   if(sortVentes==="date_desc")all=all.sort((a,b)=>new Date(b.date)-new Date(a.date));
   else if(sortVentes==="date_asc")all=all.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const filtered=getVentesFiltered(all);
+  const totalCA=filtered.reduce((s,v)=>s+v.totalTTC,0);
+  const label=ventesFilter==="day"?"Aujourd'hui":ventesFilter==="week"?"Cette semaine":ventesFilter==="month"?"Ce mois":"Tout";
+  document.getElementById("ventes-sub").textContent=`${label} · ${filtered.length} vente${filtered.length>1?"s":""} · CA : ${fmtEur(totalCA)}`;
   const arrow=dir=>dir==="date_desc"?"↓":dir==="date_asc"?"↑":"↕";
   const sortBtn=`<button onclick="toggleSortVentes()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--orange);font-weight:700;padding:0;font-family:'Barlow',sans-serif">${arrow(sortVentes)}</button>`;
   document.getElementById("ventes-date-th").innerHTML=`Date ${sortBtn}`;
-  document.getElementById("ventes-body").innerHTML=all.length===0?`<tr><td colspan="8" class="empty-state">Aucune vente enregistrée</td></tr>`:all.map(s=>`<tr>
+  document.getElementById("ventes-body").innerHTML=filtered.length===0
+    ?`<tr><td colspan="8" class="empty-state">Aucune vente ${ventesFilter!=="all"?"sur cette période":""}</td></tr>`
+    :filtered.map(s=>`<tr>
     <td style="font-weight:700;color:var(--orange);font-family:monospace;font-size:12px">${s.invoiceNum||"—"}</td>
     <td style="font-weight:600">${s.client}</td>
-    <td style="color:var(--muted)">${s.product}</td>
+    <td style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.product}">${s.product}</td>
     <td>${s.qty||1}</td>
     <td style="font-weight:700;color:var(--green)">${fmtEur(s.totalTTC)}</td>
     <td style="color:var(--muted)">${fmtDate(s.date)}</td>
     <td>${badge(s.source==="shopify"?"Shopify":"Manuel",s.source==="shopify"?"bg":"bo")}</td>
-    <td>${s.source==="manual"?`<button class="btn btn-sm btn-ghost" onclick="dlInvoice('${s.id}')">🧾 Télécharger</button>`:`<span style="font-size:11px;color:var(--light)">Auto</span>`}</td>
+    <td><button class="btn btn-sm btn-ghost" onclick="dlInvoice('${s.id}')">🧾</button></td>
   </tr>`).join("");
 }
 function toggleSortVentes(){sortVentes=sortVentes==="date_desc"?"date_asc":"date_desc";renderVentes();}
@@ -1289,20 +1332,29 @@ async function generatePDF(invoiceNum, clientObj, lines, date, shipping) {
 }
 
 async function dlInvoice(id) {
-  const s = sales.find(x => x.id === id); if(!s) return;
-  const clientObj = clients.find(c => c.id === s.clientId) || {name: s.client};
+  const s = sales.find(x=>String(x.id)===String(id)) || shopify.find(x=>String(x.id)===String(id));
+  if(!s) return;
+  const clientObj = clients.find(c=>String(c.id)===String(s.clientId)) || {name: s.client};
   const ht = s.totalTTC / 1.2;
-  const lines = s._lines || [{product: s.product, qty: s.qty||1, unitHT: s.unitHT||(ht/(s.qty||1)), totalHT: ht-(s.shipping||0)}];
-  notify("⏳ Génération du PDF…");
-  const pdf = await generatePDF(s.invoiceNum, clientObj, lines, s.date, s.shipping||0);
-  if(pdf) {
-    pdf.save(`${s.invoiceNum}-${s.client.replace(/\s/g,"_")}.pdf`);
-    notify(`🧾 Facture ${s.invoiceNum} téléchargée en PDF`);
+  const shipping = s.shipping || 0;
+  let lines;
+  if(s._lines && s._lines.length) {
+    lines = s._lines;
+  } else if(s.lineItems && s.lineItems.length) {
+    lines = s.lineItems.map(l=>({product:l.product,qty:l.qty,unitHT:l.unitHT,totalHT:l.totalHT}));
   } else {
-    // Fallback HTML si pdf échoue
-    const html = buildInvoiceHTML(s.invoiceNum, clientObj, lines, s.date, s.shipping||0);
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([html],{type:"text/html"})); a.download = `${s.invoiceNum}-${s.client.replace(/\s/g,"_")}.html`; a.click();
-    notify(`🧾 Facture ${s.invoiceNum} téléchargée (HTML)`);
+    lines = [{product:s.product,qty:s.qty||1,unitHT:s.unitHT||(ht/(s.qty||1)),totalHT:ht-shipping}];
+  }
+  notify("⏳ Génération du PDF…");
+  const invoiceNum = s.invoiceNum || `CMD-${s.shopifyOrderId||id}`;
+  const pdf = await generatePDF(invoiceNum, clientObj, lines, s.date, shipping);
+  if(pdf) {
+    pdf.save(`${invoiceNum}-${s.client.replace(/\s/g,"_")}.pdf`);
+    notify(`🧾 ${invoiceNum} téléchargée en PDF`);
+  } else {
+    const html = buildInvoiceHTML(invoiceNum, clientObj, lines, s.date, shipping);
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([html],{type:"text/html"}));a.download=`facture-${s.client.replace(/\s/g,"_")}.html`;a.click();
+    notify("🧾 Facture téléchargée (HTML)");
   }
 }
 
