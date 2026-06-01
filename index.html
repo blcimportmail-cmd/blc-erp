@@ -2953,6 +2953,20 @@ function submitTodoForm(){
   }
 })();
 loadAllData();
+
+// Auto-connect Shopify silently on startup
+async function autoConnectShopify(){
+  try{
+    const data = await shopifyFetch("/shop.json");
+    if(data.shop){
+      shopifyConnected = true;
+      console.log("✅ Shopify auto-connecté:", data.shop.name);
+    }
+  }catch(e){
+    shopifyConnected = false;
+  }
+}
+autoConnectShopify();
 </script>
 </body>
 </html>
