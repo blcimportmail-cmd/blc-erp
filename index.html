@@ -1340,7 +1340,15 @@ async function dlInvoice(id) {
   let clientObj = s.clientId ? clients.find(c=>String(c.id)===String(s.clientId)) : null;
   if(!clientObj) clientObj = clients.find(c=>c.name?.toLowerCase()===s.client?.toLowerCase());
   if(!clientObj) clientObj = clients.find(c=>s.client?.toLowerCase().includes(c.name?.toLowerCase())||c.name?.toLowerCase().includes(s.client?.toLowerCase()));
-  if(!clientObj) clientObj = {name: s.client, address:"", zipCity:"", email:"", phone:"", siret:"", tvaIntra:""};
+  if(!clientObj) clientObj = {
+    name: s.client,
+    address: s.clientAddress||"",
+    zipCity: "",
+    email: s.clientEmail||"",
+    phone: s.clientPhone||"",
+    siret: "",
+    tvaIntra: ""
+  };
   const ht = s.totalTTC / 1.2;
   const shipping = s.shipping || 0;
   let lines;
@@ -2102,6 +2110,7 @@ async function loadShopifyOrders() {
       }, 0),
       unitHT: parseFloat((parseFloat(o.subtotal_price) / 1.2 / Math.max(1, o.line_items.reduce((s,l)=>s+l.quantity,0))).toFixed(4)),
       totalTTC: parseFloat(o.total_price),
+      shipping: parseFloat(o.shipping_lines?.reduce((s,l)=>s+parseFloat(l.price||0),0)||0) / 1.2, // HT
       date: o.created_at.split("T")[0],
       status: o.financial_status === "paid" ? "paid" : o.financial_status === "refunded" ? "refunded" : "pending",
       source: "shopify",
@@ -2125,7 +2134,7 @@ async function loadShopifyOrders() {
         lines: o.lineItems||[],
         qty: o.qty||1,
         unit_ht: o.unitHT||0,
-        shipping: 0,
+        shipping: o.shipping||0,
         total_ttc: o.totalTTC,
         date: o.date,
         source: "shopify",
@@ -2715,7 +2724,7 @@ async function dbDelete(table, id) {
 // Convert Supabase row → local format
 function rowToClient(r){return {id:r.id,name:r.name,address:r.address||"",zipCity:r.zip_city||"",siret:r.siret||"",tvaIntra:r.tva_intra||"",email:r.email||"",phone:r.phone||"",totalPurchases:parseFloat(r.total_purchases||0)};}
 function rowToStock(r){return {id:r.id,name:r.name,qty:r.qty||0,reserved:r.reserved||0,unitCostHT:parseFloat(r.unit_cost_ht||0),shopifyLinked:r.shopify_linked||false,shopifyProductId:r.shopify_product_id,shopifyVariantId:r.shopify_variant_id,shopifyMultiplier:r.shopify_multiplier||1,lastUpdate:r.last_update};}
-function rowToSale(r){return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id,shopifyOrderId:r.shopify_order_id};}
+function rowToSale(r){return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:r.lines||[],lineItems:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id,shopifyOrderId:r.shopify_order_id};}
 function rowToPurchase(r){return {id:r.id,supplier:r.supplier_name,supplierId:r.supplier_id,description:r.description,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),amountHT:parseFloat(r.amount_ht||0),date:r.date,hasInvoice:r.has_invoice,invoiceFile:r.invoice_file,stockStatus:r.stock_status,linkedStockId:r.linked_stock_id};}
 function rowToCharge(r){return {id:r.id,name:r.name,type:r.type,category:r.category,amountHT:parseFloat(r.amount_ht||0),period:r.period,note:r.note,active:r.active!==false};}
 function rowToTodo(r){return {id:r.id,title:r.title,description:r.description,assigned_to:r.assigned_to,created_by:r.created_by,due_date:r.due_date,priority:r.priority||"normal",status:r.status||"todo",is_global:r.is_global,created_at:r.created_at};}
