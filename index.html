@@ -2084,7 +2084,7 @@ function setTodoFilter(f){
 
 function getFilteredTodos(){
   let filtered=todos;
-  if(todoFilter==="mine")filtered=todos.filter(t=>t.assigned_to===currentUser?.id||t.created_by===currentUser?.id);
+  if(todoFilter==="mine")filtered=todos.filter(t=>String(t.assigned_to)===String(currentUser?.id)||(!t.assigned_to&&String(t.created_by)===String(currentUser?.id)));
   else if(todoFilter==="global")filtered=todos.filter(t=>t.is_global);
   return filtered;
 }
