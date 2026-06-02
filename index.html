@@ -2359,12 +2359,12 @@ function startRec(){
     window._recognition=null;
     showTranscript(transcript);
   };
-  window._recognition.onerror=()=>{
+  window._recognition.onerror=e=>{
+    if(e.error==="aborted")return; // Arrêt volontaire, ignorer
     window._recognition=null;
     document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><p style="color:var(--red)">Erreur microphone.</p><br><button class="btn btn-secondary" onclick="showManual()">Saisir manuellement</button></div>`;
   };
   window._recognition.onend=()=>{
-    // Si arrêté sans résultat (bouton Arrêter), ne rien faire
     window._recognition=null;
   };
   // Injecter le HTML d'abord pour que le bouton existe
