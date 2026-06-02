@@ -2598,6 +2598,35 @@ function showConfirm(result){
   window._dictaResult = result; // Store globally to avoid JSON serialization issues
   document.getElementById("dicta-content").innerHTML=html;
 }
+
+// ═══════════════════════════ MATCHING FLOU ═══════════════════════════════════
+function normalize(str){
+  return (str||"").toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"") // supprimer accents
+    .replace(/[^a-z0-9 ]/g," ")                        // supprimer ponctuation
+    .replace(/\s+/g," ").trim();
+}
+function fuzzyMatch(input, list, key){
+  if(!input||!list.length)return null;
+  const ni=normalize(input);
+  // 1. Correspondance exacte normalisée
+  let match=list.find(x=>normalize(x[key])===ni);
+  if(match)return match;
+  // 2. L'un contient l'autre
+  match=list.find(x=>normalize(x[key]).includes(ni)||ni.includes(normalize(x[key])));
+  if(match)return match;
+  // 3. Score de mots en commun
+  const wordsI=ni.split(" ").filter(w=>w.length>2);
+  let best=null,bestScore=0;
+  list.forEach(x=>{
+    const wordsX=normalize(x[key]).split(" ").filter(w=>w.length>2);
+    const common=wordsI.filter(w=>wordsX.some(wx=>wx.includes(w)||w.includes(wx)));
+    const score=common.length/(Math.max(wordsI.length,wordsX.length)||1);
+    if(score>bestScore&&score>=0.5){bestScore=score;best=x;}
+  });
+  return best;
+}
+
 function applyDictaStored(){
   if(window._dictaResult) applyDicta(JSON.stringify(window._dictaResult));
 }
@@ -2608,7 +2637,7 @@ async function applyDicta(jsonStr){
 
   // ── Créer ou trouver le client ───────────────────────────────────────────
   let clientName=result.client?.name||"";
-  let clientObj=clientName?clients.find(c=>c.name.toLowerCase()===clientName.toLowerCase()):null;
+  let clientObj=clientName?fuzzyMatch(clientName,clients,'name'):null;
   if(result.client?.name&&!clientObj){
     clientObj={id:"tmp-"+Date.now(),name:result.client.name,address:result.client.address||"",siret:result.client.siret||"",tvaIntra:"",email:result.client.email||"",phone:result.client.phone||"",totalPurchases:0,_isNew:true};
     clients=[...clients,clientObj];
@@ -2630,7 +2659,7 @@ async function applyDicta(jsonStr){
     sales=[ns,...sales];
     // Deduct stock
     lines.forEach(l=>{
-      const m=stock.find(s=>s.name.toLowerCase().includes((l.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));
+      const m=fuzzyMatch(l.product,stock,'name');
       if(m){stock=stock.map(s=>String(s.id)===String(m.id)?{...s,qty:Math.max(0,s.qty-l.qty)}:s);dbPatch("stock",{id:m.id,qty:Math.max(0,m.qty-l.qty),name:m.name,reserved:m.reserved||0,unit_cost_ht:m.unitCostHT,shopify_linked:m.shopifyLinked||false,last_update:today});}
     });
     // Save sale
@@ -2642,14 +2671,14 @@ async function applyDicta(jsonStr){
   // ── Créer l'achat ────────────────────────────────────────────────────────
   if(result.action==="create_purchase"&&result.purchase?.product){
     const p=result.purchase;
-    let suppObj=suppliers.find(s=>s.name.toLowerCase().includes((p.supplier||"").toLowerCase()));
+    let suppObj=fuzzyMatch(p.supplier,suppliers,'name');
     if(!suppObj&&p.supplier){
       suppObj={id:"tmp-"+Date.now(),name:p.supplier,contact:"",email:"",phone:""};
       suppliers=[...suppliers,suppObj];
       const res=await dbPost("suppliers",{name:suppObj.name});if(res&&res[0])suppObj.id=res[0].id;
     }
     // Find or create stock item
-    let stockItem=stock.find(s=>s.name.toLowerCase().includes((p.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));
+    let stockItem=fuzzyMatch(p.product,stock,'name');
     if(!stockItem){
       stockItem={id:"tmp-"+Date.now(),name:p.product,qty:0,reserved:0,unitCostHT:p.unitHT||0,shopifyLinked:false,lastUpdate:today};
       stock=[...stock,stockItem];
@@ -2673,7 +2702,7 @@ async function applyDicta(jsonStr){
 
   // ── Changer statut achat ─────────────────────────────────────────────────
   if(result.purchaseStatus?.supplier&&result.purchaseStatus?.newStatus){
-    const m=purchases.find(p=>p.supplier.toLowerCase().includes((result.purchaseStatus.supplier||"").toLowerCase()));
+    const m=purchases.find(p=>fuzzyMatch(result.purchaseStatus.supplier,[{name:p.supplier}],'name'));
     if(m){changeStatus(m.id,result.purchaseStatus.newStatus);msgs.push("🔄 Statut mis à jour");}
   }
 
