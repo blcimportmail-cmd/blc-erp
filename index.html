@@ -1097,38 +1097,35 @@ function setStockFilter(f){
 
 
 async function deduplicateStock(){
-  // Trouver les doublons : même nom ET même quantité
-  const seen={};
+  // Grouper par nom (normalisé)
+  const groups={};
+  stock.forEach(s=>{
+    const key=s.name.trim().toLowerCase();
+    if(!groups[key]) groups[key]=[];
+    groups[key].push(s);
+  });
+
   const toDelete=[];
   const toKeep=[];
-  
-  // Trier par id pour garder toujours le plus ancien (id le plus petit)
-  const sorted=[...stock].sort((a,b)=>String(a.id).localeCompare(String(b.id)));
-  
-  sorted.forEach(s=>{
-    const key=s.name.trim().toLowerCase()+"|||"+s.qty;
-    if(seen[key]){
-      toDelete.push(s); // doublon → à supprimer
-    } else {
-      seen[key]=true;
-      toKeep.push(s);
-    }
+
+  Object.values(groups).forEach(group=>{
+    if(group.length===1){toKeep.push(group[0]);return;}
+    // Garder celui avec unitCostHT > 0 (le bon, saisi manuellement)
+    // Si plusieurs ont un coût > 0, garder le plus élevé
+    const best=group.reduce((a,b)=>{
+      if((b.unitCostHT||0)>(a.unitCostHT||0))return b;
+      return a;
+    });
+    toKeep.push(best);
+    group.filter(s=>String(s.id)!==String(best.id)).forEach(s=>toDelete.push(s));
   });
-  
-  if(toDelete.length===0){
-    notify("✅ Aucun doublon trouvé dans le stock");
-    return;
-  }
-  
-  const names=toDelete.map(s=>`"${s.name}" (${s.qty} u.)`).join(", ");
-  if(!confirm(`${toDelete.length} doublon${toDelete.length>1?"s":""} trouvé${toDelete.length>1?"s":""} :\n${names}\n\nSupprimer ?`))return;
-  
-  // Supprimer de Supabase
-  for(const s of toDelete){
-    await dbDelete("stock",s.id);
-  }
-  
-  // Mettre à jour le state local
+
+  if(toDelete.length===0){notify("✅ Aucun doublon trouvé");return;}
+
+  const lines=toDelete.map(s=>`"${s.name}" — ${s.unitCostHT||0}€/u (supprimé)`).join("\n");
+  if(!confirm(`${toDelete.length} doublon${toDelete.length>1?"s":""} trouvé${toDelete.length>1?"s":""} :\n${lines}\n\nOn garde la version avec le coût le plus élevé. Supprimer les doublons ?`))return;
+
+  for(const s of toDelete) await dbDelete("stock",s.id);
   stock=toKeep;
   renderStock();
   notify(`🗑 ${toDelete.length} doublon${toDelete.length>1?"s":""} supprimé${toDelete.length>1?"s":""}`);
