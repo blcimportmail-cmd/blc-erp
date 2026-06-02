@@ -2318,6 +2318,17 @@ async function loadShopifyOrders() {
       if(!existing||!existing.length){
         const res = await dbPost("sales", row);
         if(res&&res[0]) o.id = res[0].id;
+
+        // ── Déduire le stock ERP pour les commandes payées (nouvelles seulement) ──
+        if(o.status==="paid"){
+          o.lineItems.forEach(l=>{
+            const stockItem=fuzzyMatch(l.product,stock,'name');
+            if(!stockItem)return;
+            const newQty=Math.max(0,(stockItem.qty||0)-l.qty);
+            stock=stock.map(s=>String(s.id)===String(stockItem.id)?{...s,qty:newQty}:s);
+            dbRpc("deduct_stock",{p_stock_id:stockItem.id,p_qty:l.qty,p_date:o.date});
+          });
+        }
       }
     }
 
