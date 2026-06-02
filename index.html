@@ -2477,11 +2477,15 @@ function showConfirm(result){
   }
 
   html+=`<div style="display:flex;gap:10px;margin-top:16px">
-    <button class="btn btn-primary" style="flex:1" onclick='applyDicta(${JSON.stringify(JSON.stringify(result))})'>✅ Confirmer</button>
+    <button class="btn btn-primary" style="flex:1" onclick="applyDictaStored()">✅ Confirmer</button>
     <button class="btn btn-secondary" onclick="openDicta()">🔁 Recommencer</button>
     <button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
   </div>`;
+  window._dictaResult = result; // Store globally to avoid JSON serialization issues
   document.getElementById("dicta-content").innerHTML=html;
+}
+function applyDictaStored(){
+  if(window._dictaResult) applyDicta(JSON.stringify(window._dictaResult));
 }
 async function applyDicta(jsonStr){
   const result=JSON.parse(jsonStr);
