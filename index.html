@@ -2563,11 +2563,24 @@ async function analyzeText(text){
   // Remettre la première lettre en majuscule
   cleanText=cleanText.charAt(0).toUpperCase()+cleanText.slice(1);
 
+  const collaborateurs="Barto,Coco,Louis,Thibault";
+  const today2=new Date().toISOString().split("T")[0];
+  const tomorrow=new Date(Date.now()+86400000).toISOString().split("T")[0];
   const prompt=`ERP BLC Import (grossiste vêtements). JSON uniquement, pas de markdown.
 Commande: "${cleanText}"
-Stock:${knownProducts||"-"} Clients:${knownClients||"-"} Fournisseurs:${knownSuppliers||"-"}
-Règles: VENTE(client achète)→create_sale ACHAT(BLC achète)→create_purchase. Corrige erreurs phonétiques. totalTTC=(qty*unitHT+shipping)*1.2. stockStatus défaut=local.
-{"action":"create_sale|create_purchase|update_purchase_status","client":{"name":"","address":"","siret":"","email":"","phone":""},"sale":{"product":"","qty":0,"unitHT":0,"shipping":0,"totalTTC":0,"lines":[{"product":"","qty":0,"unitHT":0,"totalHT":0}]},"purchase":{"supplier":"","product":"","qty":0,"unitHT":0,"totalHT":0,"stockStatus":"local"},"purchaseStatus":{"supplier":"","newStatus":"local"},"summary":""}`;
+Stock:${knownProducts||"-"} Clients:${knownClients||"-"} Fournisseurs:${knownSuppliers||"-"} Collaborateurs:${collaborateurs}
+Aujourd'hui:${today2} Demain:${tomorrow}
+Actions: create_sale(vente) create_purchase(achat) update_purchase_status(changer statut) create_client(nouveau client) create_todo(tâche) create_rdv(rendez-vous) create_invoice(facture sans vente liée)
+Règles: Corrige phonétique. totalTTC=(qty*unitHT+shipping)*1.2. stockStatus défaut=local. Pour todo: assignedTo=prénom collaborateur. Pour rdv: date/heure en français→ISO.
+{"action":"create_sale|create_purchase|update_purchase_status|create_client|create_todo|create_rdv|create_invoice",
+"client":{"name":"","address":"","siret":"","email":"","phone":""},
+"sale":{"product":"","qty":0,"unitHT":0,"shipping":0,"totalTTC":0,"lines":[{"product":"","qty":0,"unitHT":0,"totalHT":0}]},
+"purchase":{"supplier":"","product":"","qty":0,"unitHT":0,"totalHT":0,"stockStatus":"local"},
+"purchaseStatus":{"supplier":"","newStatus":"local"},
+"todo":{"title":"","description":"","assignedTo":"","priority":"normal","dueDate":""},
+"rdv":{"title":"","date":"","time":"","endTime":"","clientName":"","notes":""},
+"invoice":{"clientName":"","lines":[{"product":"","qty":0,"unitHT":0}],"shipping":0,"date":""},
+"summary":""}`;
 
   try{
     // Use proxy to avoid CORS
@@ -2639,12 +2652,43 @@ function showConfirm(result){
     </div>`;
   }
 
+  // Todo
+  if(result.todo?.title){
+    const assignee=result.todo.assignedTo?allUsers.find(u=>normalize(u.display_name).includes(normalize(result.todo.assignedTo))):null;
+    html+=`<div style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">✅ Tâche à créer</div>
+      <div class="sub-box" style="font-size:12px"><b>${result.todo.title}</b>${assignee?"<br>→ "+assignee.display_name:" (globale)"}${result.todo.dueDate?"<br>📅 "+fmtDate(result.todo.dueDate):""}</div>
+    </div>`;
+  }
+  // RDV
+  if(result.rdv?.title){
+    html+=`<div style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">📅 RDV à créer</div>
+      <div class="sub-box" style="font-size:12px"><b>${result.rdv.title}</b><br>${result.rdv.date?fmtDate(result.rdv.date):"—"}${result.rdv.time?" à "+result.rdv.time:""}${result.rdv.clientName?"<br>👤 "+result.rdv.clientName:""}</div>
+    </div>`;
+  }
+  // Facture
+  if(result.invoice?.clientName){
+    const lines=result.invoice.lines||[];
+    const totalHT=lines.reduce((s,l)=>s+(l.qty||1)*(l.unitHT||0),0)+(result.invoice.shipping||0);
+    html+=`<div style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">🧾 Facture à créer</div>
+      <div class="sub-box" style="font-size:12px"><b>${result.invoice.clientName}</b><br>${lines.map(l=>`${l.qty}x ${l.product} · ${fmtEur(l.unitHT)}/u HT`).join("<br>")}<br><b style="color:var(--orange)">TTC : ${fmtEur(totalHT*1.2)}</b></div>
+    </div>`;
+  }
+  // Client seul
+  if(result.action==="create_client"&&result.client?.name){
+    html+=`<div style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">👤 Client à créer</div>
+      <div class="sub-box" style="font-size:12px"><b>${result.client.name}</b>${result.client.address?"<br>"+result.client.address:""}${result.client.phone?"<br>📞 "+result.client.phone:""}</div>
+    </div>`;
+  }
   html+=`<div style="display:flex;gap:10px;margin-top:16px">
     <button class="btn btn-primary" style="flex:1" onclick="applyDictaStored()">✅ Confirmer</button>
     <button class="btn btn-secondary" onclick="openDicta()">🔁 Recommencer</button>
     <button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
   </div>`;
-  window._dictaResult = result; // Store globally to avoid JSON serialization issues
+  window._dictaResult = result;
   document.getElementById("dicta-content").innerHTML=html;
 }
 
@@ -2755,8 +2799,76 @@ async function applyDicta(jsonStr){
     if(m){changeStatus(m.id,result.purchaseStatus.newStatus);msgs.push("🔄 Statut mis à jour");}
   }
 
+  // ── Créer client seul ────────────────────────────────────────────────────
+  if(result.action==="create_client"&&result.client?.name&&!clientObj){
+    const row={name:result.client.name,address:result.client.address||"",zip_city:"",siret:result.client.siret||"",tva_intra:"",email:result.client.email||"",phone:result.client.phone||"",total_purchases:0};
+    const res=await dbPost("clients",row);
+    const newId=res&&res[0]?res[0].id:"tmp-"+Date.now();
+    clients=[...clients,{id:newId,...row,totalPurchases:0}];
+    msgs.push(`👤 Client "${result.client.name}" créé`);
+  }
+
+  // ── Créer tâche todo ─────────────────────────────────────────────────────
+  if(result.action==="create_todo"&&result.todo?.title){
+    const td=result.todo;
+    const assignee=td.assignedTo?allUsers.find(u=>normalize(u.display_name).includes(normalize(td.assignedTo))):null;
+    const newTodo={
+      id:"tmp-"+Date.now(),title:td.title,description:td.description||"",
+      assigned_to:assignee?.id||null,created_by:currentUser?.id||null,
+      priority:td.priority||"normal",status:"todo",
+      due_date:td.dueDate||null,is_global:!assignee,created_at:new Date().toISOString()
+    };
+    todos=[newTodo,...todos];
+    const isV=v=>v&&/^[0-9a-f-]{36}$/i.test(String(v));
+    const res=await dbPost("todos",{title:newTodo.title,description:newTodo.description||null,assigned_to:isV(newTodo.assigned_to)?newTodo.assigned_to:null,created_by:isV(newTodo.created_by)?newTodo.created_by:null,due_date:newTodo.due_date||null,priority:newTodo.priority,status:"todo",is_global:newTodo.is_global});
+    if(res&&res[0])newTodo.id=res[0].id;
+    msgs.push(`✅ Tâche "${td.title}"${assignee?" → "+assignee.display_name:" (globale)"}`);
+  }
+
+  // ── Créer rendez-vous ────────────────────────────────────────────────────
+  if(result.action==="create_rdv"&&result.rdv?.title){
+    const r=result.rdv;
+    const rdvClient=r.clientName?fuzzyMatch(r.clientName,clients,'name'):null;
+    const newRdv={
+      id:"tmp-"+Date.now(),title:r.title,date:r.date||today,
+      time:r.time||null,endTime:r.endTime||null,
+      clientId:rdvClient?.id||null,clientName:r.clientName||"",
+      notes:r.notes||"",source:"manual"
+    };
+    rdvList=[newRdv,...rdvList];
+    const res=await dbPost("rdv",{title:newRdv.title,date:newRdv.date,time:newRdv.time||null,end_time:newRdv.endTime||null,client_id:newRdv.clientId||null,client_name:newRdv.clientName||null,notes:newRdv.notes||null,source:"manual",created_by:currentUser?.id||null});
+    if(res&&res[0])newRdv.id=res[0].id;
+    msgs.push(`📅 RDV "${r.title}" le ${r.date}${r.time?" à "+r.time:""}`);
+  }
+
+  // ── Créer facture directe ────────────────────────────────────────────────
+  if(result.action==="create_invoice"&&result.invoice?.clientName){
+    const inv=result.invoice;
+    let invClient=fuzzyMatch(inv.clientName,clients,'name');
+    if(!invClient&&inv.clientName){
+      invClient={id:"tmp-"+Date.now(),name:inv.clientName,address:"",totalPurchases:0};
+      clients=[...clients,invClient];
+      const res=await dbPost("clients",{name:inv.clientName,address:"",zip_city:"",siret:"",tva_intra:"",email:"",phone:"",total_purchases:0});
+      if(res&&res[0])invClient.id=res[0].id;
+    }
+    const lines=(inv.lines||[]).map(l=>({product:l.product,qty:l.qty||1,unitHT:l.unitHT||0,totalHT:(l.qty||1)*(l.unitHT||0)}));
+    if(lines.length){
+      const ship=inv.shipping||0;
+      const totalHT=lines.reduce((s,l)=>s+l.totalHT,0)+ship;
+      const ttc=parseFloat((totalHT*1.2).toFixed(2));
+      const num=nextFAC();
+      const ns={id:"tmp-"+Date.now(),invoiceNum:num,globalSeq:globalInvCounter,client:invClient.name,clientId:invClient.id,product:lines.map(l=>l.product).join(", "),_lines:lines,qty:lines[0]?.qty||1,unitHT:lines[0]?.unitHT||0,shipping:ship,totalTTC:ttc,date:inv.date||today,source:"manual"};
+      sales=[ns,...sales];
+      const res=await dbPost("sales",{invoice_num:ns.invoiceNum,global_seq:ns.globalSeq,client_id:ns.clientId,client_name:ns.client,product:ns.product,lines:ns._lines,qty:ns.qty,unit_ht:ns.unitHT,shipping:ns.shipping,total_ttc:ns.totalTTC,date:ns.date,source:"manual"});
+      if(res&&res[0])ns.id=res[0].id;
+      msgs.push(`🧾 Facture ${num} — ${fmtEur(ttc)}`);
+    }
+  }
+
   closeModal();
   renderDashboard();renderVentes();renderAchats();renderStock();
+  if(document.getElementById("todo-board"))renderTodo();
+  if(document.getElementById("rdv-body"))renderRdv();
   notify("🎙 "+(msgs.join(" · ")||"Action effectuée"));
 }
 
