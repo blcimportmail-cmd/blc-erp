@@ -2736,17 +2736,25 @@ function fuzzyMatch(input, list, key){
   // 1. Correspondance exacte normalisée
   let match=list.find(x=>normalize(x[key])===ni);
   if(match)return match;
-  // 2. L'un contient l'autre
-  match=list.find(x=>normalize(x[key]).includes(ni)||ni.includes(normalize(x[key])));
+  // 2. L'un contient l'autre entièrement (pas juste un mot)
+  match=list.find(x=>{
+    const nx=normalize(x[key]);
+    // Eviter les faux positifs : la chaîne incluse doit faire au moins 60% de la plus longue
+    if(nx.includes(ni)&&ni.length/nx.length>=0.6)return true;
+    if(ni.includes(nx)&&nx.length/ni.length>=0.6)return true;
+    return false;
+  });
   if(match)return match;
-  // 3. Score de mots en commun
-  const wordsI=ni.split(" ").filter(w=>w.length>2);
+  // 3. Score de mots significatifs en commun (longueur > 4 seulement)
+  const wordsI=ni.split(" ").filter(w=>w.length>4);
+  if(!wordsI.length)return null; // mots trop courts → pas de match flou
   let best=null,bestScore=0;
   list.forEach(x=>{
-    const wordsX=normalize(x[key]).split(" ").filter(w=>w.length>2);
-    const common=wordsI.filter(w=>wordsX.some(wx=>wx.includes(w)||w.includes(wx)));
+    const wordsX=normalize(x[key]).split(" ").filter(w=>w.length>4);
+    if(!wordsX.length)return;
+    const common=wordsI.filter(w=>wordsX.some(wx=>wx===w)); // correspondance exacte des mots
     const score=common.length/(Math.max(wordsI.length,wordsX.length)||1);
-    if(score>bestScore&&score>=0.5){bestScore=score;best=x;}
+    if(score>bestScore&&score>=0.8){bestScore=score;best=x;} // seuil strict 80%
   });
   return best;
 }
