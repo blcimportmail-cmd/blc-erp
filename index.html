@@ -2297,72 +2297,46 @@ async function loadShopifyStock() {
   try {
     const data = await shopifyFetch("/products.json?limit=250");
     const products = data.products || [];
-    let linked = 0, created = 0;
+    let linked = 0;
 
     for(const p of products) {
       const { multiplier, name } = parseShopifyTitle(p.title);
       for(const v of p.variants) {
         if(v.inventory_management !== "shopify") continue;
 
-        // Find existing ERP product by variant ID or name
-        const existing = stock.find(s =>
-          s.shopifyVariantId === v.id ||
-          s.name.toLowerCase() === name.toLowerCase()
-        );
+        // Chercher par variantId d'abord, puis par nom (matching flou)
+        let existing = stock.find(s => s.shopifyVariantId === v.id);
+        if(!existing) existing = fuzzyMatch(name, stock, "name");
 
         if(existing) {
-          // Just link — DO NOT overwrite qty from Shopify
+          // Lier sans jamais écraser le prix ni la quantité ERP
           existing.shopifyProductId = p.id;
           existing.shopifyVariantId = v.id;
           existing.shopifyLinked = true;
           existing.shopifyMultiplier = multiplier;
-          // Save link to DB (without changing qty)
+          // Sauvegarder le lien en DB — prix ERP conservé
           await dbPatch("stock", {
             id: existing.id,
             name: existing.name,
             qty: existing.qty,
             reserved: existing.reserved || 0,
-            unit_cost_ht: existing.unitCostHT || 0,
+            unit_cost_ht: existing.unitCostHT || 0, // TOUJOURS le prix ERP
             shopify_linked: true,
             shopify_multiplier: multiplier,
+            shopify_variant_id: v.id,
+            shopify_product_id: p.id,
             last_update: existing.lastUpdate
           });
-          // Push ERP qty → Shopify (ERP is source of truth)
+          // Pousser la quantité ERP → Shopify
           await syncStockToShopify(existing);
           linked++;
-        } else {
-          // New product not in ERP yet — import from Shopify
-          const lotQty = v.inventory_quantity || 0;
-          const realQty = lotQty * multiplier;
-          const newItem = {
-            id: "tmp-" + Date.now() + Math.random(),
-            name,
-            qty: realQty,
-            reserved: 0,
-            unitCostHT: 0,
-            shopifyLinked: true,
-            shopifyProductId: p.id,
-            shopifyVariantId: v.id,
-            shopifyMultiplier: multiplier,
-            lastUpdate: new Date().toISOString().split("T")[0],
-          };
-          stock.push(newItem);
-          const res = await dbPost("stock", {
-            name,
-            qty: realQty,
-            reserved: 0,
-            unit_cost_ht: 0,
-            shopify_linked: true,
-            shopify_multiplier: multiplier,
-            last_update: newItem.lastUpdate
-          });
-          if(res && res[0]) newItem.id = res[0].id;
-          created++;
         }
+        // Si le produit n'existe pas dans l'ERP → on NE crée PAS
+        // Le prix doit toujours être saisi manuellement dans l'ERP
       }
     }
     renderStock();
-    notify(`✅ Sync Shopify : ${linked} produits liés, ${created} nouveaux · Quantités ERP poussées vers Shopify`);
+    notify(`✅ Sync Shopify : ${linked} produit${linked>1?"s":""} lié${linked>1?"s":""}. Prix ERP conservés.`);
   } catch (err) {
     notify("❌ Erreur sync Shopify : " + err.message);
     console.error(err);
