@@ -760,6 +760,7 @@ function renderDashboard(){
     const area=`M${pts[0][0]},${H} `+pts.map(p=>`L${p[0]},${p[1]}`).join(" ")+` L${pts[pts.length-1][0]},${H} Z`;
     // Ligne de la courbe
     const line=`M${pts[0][0]},${pts[0][1]} `+pts.slice(1).map(p=>`L${p[0]},${p[1]}`).join(" ");
+    svg.setAttribute("width", W);
     svg.innerHTML=`
       <defs>
         <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
@@ -769,8 +770,16 @@ function renderDashboard(){
       </defs>
       <path d="${area}" fill="url(#spark-grad)"/>
       <path d="${line}" fill="none" stroke="#F47920" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-      ${pts.map((p,i)=>barVals[i]>0?`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#F47920" stroke="#fff" stroke-width="1.5"/>
-        <title>${fmtEur(barVals[i])}</title>`:"").join("")}
+      ${pts.map((p,i)=>`
+        <g class="spark-point" style="cursor:pointer">
+          ${barVals[i]>0?`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#F47920" stroke="#fff" stroke-width="1.5"/>`:`<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="transparent"/>`}
+          <rect x="${Math.min(p[0]-38, W-80)}" y="${Math.max(p[1]-34,2)}" width="76" height="22" rx="5" fill="#0F1535" opacity="0" class="spark-tt-bg-${i}"/>
+          <text x="${Math.min(p[0], W-40)}" y="${Math.max(p[1]-18,16)}" text-anchor="middle" font-size="11" font-weight="700" fill="#F47920" opacity="0" class="spark-tt-${i}" font-family="Barlow,sans-serif">${fmtEur(barVals[i])}</text>
+          <text x="${Math.min(p[0], W-40)}" y="${Math.max(p[1]-18,16)+12}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.6)" opacity="0" class="spark-tt-date-${i}" font-family="Barlow,sans-serif">${new Date(barDates[i]).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</text>
+          <rect x="${p[0]-12}" y="0" width="24" height="${H}" fill="transparent"
+            onmouseenter="document.querySelectorAll('.spark-tt-${i},.spark-tt-bg-${i},.spark-tt-date-${i}').forEach(e=>e.setAttribute('opacity','1'))"
+            onmouseleave="document.querySelectorAll('.spark-tt-${i},.spark-tt-bg-${i},.spark-tt-date-${i}').forEach(e=>e.setAttribute('opacity','0'))"/>
+        </g>`).join("")}
     `;
   }
   document.getElementById("spark-labels").innerHTML=barDates.map(d=>new Date(d).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})).map(l=>`<div class="spark-lbl">${l}</div>`).join("");
