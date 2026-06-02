@@ -2403,8 +2403,21 @@ JSON attendu:
     "stockStatus": "local" | "livraison" | "preparation"
   },
   "purchaseStatus": {"supplier": "", "newStatus": "preparation" | "livraison" | "local"},
+  "rdv": {
+    "title": "",
+    "date": "YYYY-MM-DD",
+    "time": "HH:MM",
+    "endTime": "HH:MM",
+    "clientName": "",
+    "notes": ""
+  },
   "summary": "résumé court en français de ce qui va être fait"
-}`;
+}
+
+Pour les RDV:
+- "demain" = ${new Date(Date.now()+86400000).toISOString().split("T")[0]}
+- "aujourd'hui" = ${new Date().toISOString().split("T")[0]}
+- action = "create_rdv"`;
 
   try{
     // Use proxy to avoid CORS
@@ -2463,6 +2476,19 @@ function showConfirm(result){
         ${result.purchase.qty}x <b>${result.purchase.product}</b> · ${fmtEur(result.purchase.unitHT)}/u HT<br>
         Total HT : <b>${fmtEur(result.purchase.totalHT)}</b><br>
         Statut : <b>${result.purchase.stockStatus==="local"?"📦 Au local":result.purchase.stockStatus==="livraison"?"🚚 En livraison":"⏳ En préparation"}</b>
+      </div>
+    </div>`;
+  }
+
+  // RDV
+  if(result.rdv?.title){
+    html+=`<div style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">📅 Rendez-vous à créer</div>
+      <div class="sub-box" style="font-size:12px">
+        <b>${result.rdv.title}</b><br>
+        📆 ${result.rdv.date?fmtDate(result.rdv.date):"—"} ${result.rdv.time?"à "+result.rdv.time:""}${result.rdv.endTime?" → "+result.rdv.endTime:""}<br>
+        ${result.rdv.clientName?"👤 "+result.rdv.clientName:""}
+        ${result.rdv.notes?"<br>📝 "+result.rdv.notes:""}
       </div>
     </div>`;
   }
@@ -2563,8 +2589,30 @@ async function applyDicta(jsonStr){
     if(m){changeStatus(m.id,result.purchaseStatus.newStatus);msgs.push("🔄 Statut mis à jour");}
   }
 
+  // ── Créer un RDV ─────────────────────────────────────────────────────────
+  if(result.action==="create_rdv"&&result.rdv?.title){
+    const r=result.rdv;
+    const clientObj=r.clientName?clients.find(c=>c.name.toLowerCase().includes(r.clientName.toLowerCase())):null;
+    const newRdv={
+      id:"tmp-"+Date.now(),
+      title:r.title,
+      date:r.date||today,
+      time:r.time||null,
+      endTime:r.endTime||null,
+      clientId:clientObj?.id||null,
+      clientName:r.clientName||"",
+      notes:r.notes||"",
+      source:"manual",
+    };
+    rdvList=[newRdv,...rdvList];
+    const row={title:newRdv.title,date:newRdv.date,time:newRdv.time,end_time:newRdv.endTime,client_id:newRdv.clientId,client_name:newRdv.clientName,notes:newRdv.notes,source:"manual",created_by:currentUser?.id||null};
+    const res=await dbPost("rdv",row);if(res&&res[0])newRdv.id=res[0].id;
+    msgs.push(`📅 RDV "${r.title}" créé`);
+  }
+
   closeModal();
   renderDashboard();renderVentes();renderAchats();renderStock();
+  if(document.getElementById("rdv-body")) renderRdv();
   notify("🎙 "+(msgs.join(" · ")||"Action effectuée"));
 }
 
