@@ -305,6 +305,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
           <button class="btn btn-sm btn-secondary" id="sf-preparation" onclick="setStockFilter('preparation')" >⏳ En préparation</button>
           <button class="btn btn-sm btn-secondary" id="sf-all"         onclick="setStockFilter('all')"         >Tout</button>
         </div>
+        <button class="btn btn-secondary" onclick="deduplicateStock()">🔍 Supprimer doublons</button>
         <button class="btn btn-primary" onclick="openAddStock(null)">+ Ajouter produit</button>
       </div>
     </div>
@@ -1092,6 +1093,45 @@ function setStockFilter(f){
     btn.style.fontWeight="700";
   }
   renderStock();
+}
+
+
+async function deduplicateStock(){
+  // Trouver les doublons : même nom ET même quantité
+  const seen={};
+  const toDelete=[];
+  const toKeep=[];
+  
+  // Trier par id pour garder toujours le plus ancien (id le plus petit)
+  const sorted=[...stock].sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+  
+  sorted.forEach(s=>{
+    const key=s.name.trim().toLowerCase()+"|||"+s.qty;
+    if(seen[key]){
+      toDelete.push(s); // doublon → à supprimer
+    } else {
+      seen[key]=true;
+      toKeep.push(s);
+    }
+  });
+  
+  if(toDelete.length===0){
+    notify("✅ Aucun doublon trouvé dans le stock");
+    return;
+  }
+  
+  const names=toDelete.map(s=>`"${s.name}" (${s.qty} u.)`).join(", ");
+  if(!confirm(`${toDelete.length} doublon${toDelete.length>1?"s":""} trouvé${toDelete.length>1?"s":""} :\n${names}\n\nSupprimer ?`))return;
+  
+  // Supprimer de Supabase
+  for(const s of toDelete){
+    await dbDelete("stock",s.id);
+  }
+  
+  // Mettre à jour le state local
+  stock=toKeep;
+  renderStock();
+  notify(`🗑 ${toDelete.length} doublon${toDelete.length>1?"s":""} supprimé${toDelete.length>1?"s":""}`);
 }
 
 async function reloadStock(){
