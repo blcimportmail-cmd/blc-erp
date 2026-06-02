@@ -1177,10 +1177,13 @@ async function reloadStock(){
 function getStockWithStatus(){
   return stock.map(s=>{
     const sid=String(s.id);
-    // Get lines per status
+    // Get lines per status — match par linkedStockId OU par nom de produit
     const getLinesForStatus=(status)=>purchases
       .filter(p=>p.stockStatus===status)
-      .flatMap(p=>(p._lines||[]).filter(l=>String(l.linkedStockId)===sid));
+      .flatMap(p=>(p._lines||[]).filter(l=>
+        (l.linkedStockId&&String(l.linkedStockId)===sid) ||
+        (!l.linkedStockId&&l.product&&normalize(l.product)===normalize(s.name))
+      ));
 
     const localLines=getLinesForStatus("local");
     const livLines=getLinesForStatus("livraison");
@@ -1754,7 +1757,7 @@ function calcPurchTotal(){
   else info.style.display="none";
 }
 
-function submitPurchase(){
+async function submitPurchase(){
   const supSel=document.getElementById("p-sup-sel").value;
   let supName="",supplierId=null;
   if(supSel==="__new__"){
@@ -1848,12 +1851,25 @@ function submitPurchase(){
     });
   }
 
-  // Save to Supabase
+  // Save new products first (attendre les vrais IDs avant de sauvegarder l'achat)
+  await Promise.all(lines.map(async l=>{
+    if(l.linkedStockId&&String(l.linkedStockId).startsWith("tmp-")){
+      const s=stock.find(x=>String(x.id)===String(l.linkedStockId));
+      if(s){
+        const r=await dbPost("stock",{name:s.name,qty:s.qty,reserved:0,unit_cost_ht:s.unitCostHT,shopify_linked:false,last_update:np.date});
+        if(r&&r[0]){
+          const realId=r[0].id;
+          stock=stock.map(x=>String(x.id)===String(l.linkedStockId)?{...x,id:realId}:x);
+          l.linkedStockId=realId;
+          if(String(np.linkedStockId)===String(s.id))np.linkedStockId=realId;
+        }
+      }
+    }
+  }));
+
+  // Maintenant sauvegarder l'achat avec les vrais IDs dans les lines
   const purchRow={supplier_id:np.supplierId||null,supplier_name:np.supplier,description:np.description,lines:np._lines||[],qty:np.qty,unit_ht:np.unitHT||0,amount_ht:np.amountHT,date:np.date,has_invoice:np.hasInvoice||false,invoice_file:np.invoiceFile||null,stock_status:np.stockStatus,linked_stock_id:np.linkedStockId||null};
   dbPost("purchases",purchRow).then(r=>{if(r&&r[0])np.id=r[0].id;});
-
-  // Save new products created during purchase
-  lines.forEach(l=>{if(l.linkedStockId&&String(l.linkedStockId).startsWith("tmp-")){const s=stock.find(x=>String(x.id)===String(l.linkedStockId));if(s){dbPost("stock",{name:s.name,qty:s.qty,reserved:0,unit_cost_ht:s.unitCostHT,shopify_linked:false,last_update:np.date}).then(r=>{if(r&&r[0]){const realId=r[0].id;stock=stock.map(x=>String(x.id)===String(l.linkedStockId)?{...x,id:realId}:x);l.linkedStockId=realId;}});}}});
   // Save new supplier if created
   if(supSel==="__new__"&&supplierId){const sup=suppliers.find(x=>String(x.id)===String(supplierId));if(sup)dbPost("suppliers",{name:sup.name,contact:sup.contact||null,email:sup.email||null,phone:sup.phone||null}).then(r=>{if(r&&r[0])sup.id=r[0].id;});}
   closeModal();renderAchats();
