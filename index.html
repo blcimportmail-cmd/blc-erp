@@ -1192,6 +1192,13 @@ function getStockWithStatus(){
         const match=fuzzyMatch(l.product,stock,'name');
         if(match)sid=String(match.id);
       }
+      if(!sid){
+        // Fallback exact par nom si pas de linkedStockId
+        if(l.product){
+          const m=stock.find(s=>normalize(s.name)===normalize(l.product));
+          if(m)sid=String(m.id);
+        }
+      }
       if(!sid||!index[sid])return;
       if(status==="livraison")index[sid].liv.push(l);
       else if(status==="preparation")index[sid].prep.push(l);
