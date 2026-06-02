@@ -395,7 +395,7 @@ function showConfirmMobile(result){
   }
   if(result.sale?.totalTTC||result.sale?.unitHT){
     const lines=result.sale.lines?.length?result.sale.lines:[{product:result.sale.product,qty:result.sale.qty,unitHT:result.sale.unitHT}];
-    blocks+=`<div class="confirm-block"><div class="confirm-block-title">💰 Vente</div>${lines.map(l=>`${l.qty}x <b>${l.product}</b> · ${fmtEur(l.unitHT)}/u`).join("<br>")}${result.sale.shipping>0?`<br>🚚 ${fmtEur(result.sale.shipping)}`""}<br><b style="color:var(--orange)">${fmtEur(result.sale.totalTTC)} TTC</b></div>`;
+    blocks+=`<div class="confirm-block"><div class="confirm-block-title">💰 Vente</div>${lines.map(l=>`${l.qty}x <b>${l.product}</b> · ${fmtEur(l.unitHT)}/u`).join("<br>")}${result.sale.shipping>0?"<br>🚚 "+fmtEur(result.sale.shipping):""}<br><b style="color:var(--orange)">${fmtEur(result.sale.totalTTC)} TTC</b></div>`;
   }
   if(result.purchase?.product){
     blocks+=`<div class="confirm-block"><div class="confirm-block-title">📦 Achat</div><b>${result.purchase.supplier}</b><br>${result.purchase.qty}x ${result.purchase.product} · ${fmtEur(result.purchase.unitHT)}/u<br>${result.purchase.stockStatus==="local"?"📦 Au local":result.purchase.stockStatus==="livraison"?"🚚 En livraison":"⏳ En préparation"}</div>`;
