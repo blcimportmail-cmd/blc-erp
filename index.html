@@ -2411,13 +2411,27 @@ JSON attendu:
     "clientName": "",
     "notes": ""
   },
+  "todo": {
+    "title": "",
+    "description": "",
+    "assignedTo": "",
+    "priority": "normal",
+    "dueDate": "YYYY-MM-DD",
+    "isGlobal": false
+  },
   "summary": "résumé court en français de ce qui va être fait"
 }
 
-Pour les RDV:
+Règles:
+- Vente (client commande à BLC) → action = "create_sale"
+- Achat (BLC achète chez fournisseur) → action = "create_purchase"
+- Changement statut achat → action = "update_purchase_status"
+- Rendez-vous → action = "create_rdv"
+- Tâche à faire → action = "create_todo"
 - "demain" = ${new Date(Date.now()+86400000).toISOString().split("T")[0]}
 - "aujourd'hui" = ${new Date().toISOString().split("T")[0]}
-- action = "create_rdv"`;
+- Pour todo: assignedTo = prénom exact parmi: Barto, Coco, Louis, Thibault (ou vide si globale)
+- Pour la livraison dans une vente: shipping = total frais port (ex: "4 cartons à 25€" = 100)`;
 
   try{
     // Use proxy to avoid CORS
@@ -2457,12 +2471,26 @@ function showConfirm(result){
   // Vente
   if(result.sale?.product||result.sale?.lines?.length){
     const lines=result.sale.lines?.length?result.sale.lines:[{product:result.sale.product,qty:result.sale.qty,unitHT:result.sale.unitHT,totalHT:(result.sale.qty*result.sale.unitHT)}];
+    // Check stock for each line
+    const stockChecks=lines.map(l=>{
+      const m=stock.find(s=>s.name.toLowerCase().includes((l.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));
+      if(!m) return {product:l.product,available:-1,needed:l.qty,ok:false};
+      return {product:l.product,available:m.qty,needed:l.qty,ok:m.qty>=l.qty};
+    });
+    const hasStockIssue=stockChecks.some(s=>!s.ok);
     html+=`<div style="margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">💰 Vente à créer</div>
-      <div class="sub-box" style="font-size:12px">
-        ${lines.map(l=>`${l.qty}x <b>${l.product}</b> · ${fmtEur(l.unitHT)}/u HT`).join("<br>")}
+      <div style="font-size:10px;font-weight:700;color:${hasStockIssue?"var(--red)":"var(--green)"};text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">${hasStockIssue?"🚫 STOCK INSUFFISANT":"💰 Vente à créer"}</div>
+      <div class="sub-box" style="font-size:12px;${hasStockIssue?"border:1.5px solid var(--red);background:var(--red-pale)":""}">
+        ${lines.map((l,i)=>{
+          const sc=stockChecks[i];
+          return `${l.qty}x <b>${l.product}</b> · ${fmtEur(l.unitHT)}/u HT
+          ${sc.available===-1?`<span style="color:var(--red);font-size:10px"> ❌ Produit introuvable</span>`:
+            !sc.ok?`<span style="color:var(--red);font-size:10px"> ❌ Stock : ${sc.available} dispo</span>`:
+            `<span style="color:var(--green);font-size:10px"> ✅ Stock : ${sc.available} dispo</span>`}`;
+        }).join("<br>")}
         ${result.sale.shipping>0?`<br>🚚 Livraison : <b>${fmtEur(result.sale.shipping)}</b>`:""}
-        <br><b style="color:var(--orange);font-size:13px">Total TTC : ${fmtEur(result.sale.totalTTC)}</b>
+        <br><b style="color:${hasStockIssue?"var(--red)":"var(--orange)"};font-size:13px">Total TTC : ${fmtEur(result.sale.totalTTC)}</b>
+        ${hasStockIssue?`<br><b style="color:var(--red)">⚠ Vente bloquée — stock épuisé</b>`:""}
       </div>
     </div>`;
   }
@@ -2476,6 +2504,22 @@ function showConfirm(result){
         ${result.purchase.qty}x <b>${result.purchase.product}</b> · ${fmtEur(result.purchase.unitHT)}/u HT<br>
         Total HT : <b>${fmtEur(result.purchase.totalHT)}</b><br>
         Statut : <b>${result.purchase.stockStatus==="local"?"📦 Au local":result.purchase.stockStatus==="livraison"?"🚚 En livraison":"⏳ En préparation"}</b>
+      </div>
+    </div>`;
+  }
+
+  // Todo
+  if(result.todo?.title){
+    const assignee = result.todo.assignedTo ? allUsers.find(u=>u.display_name.toLowerCase()===result.todo.assignedTo.toLowerCase()) : null;
+    const prioColors = {low:"var(--light)",normal:"var(--orange)",high:"var(--red)",urgent:"#9333ea"};
+    html+=`<div style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">✅ Tâche à créer</div>
+      <div class="sub-box" style="font-size:12px">
+        <b>${result.todo.title}</b><br>
+        ${result.todo.description?`📝 ${result.todo.description}<br>`:""}
+        ${assignee?`<span style="background:${assignee.avatar_color};color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">${assignee.display_name}</span>`:`<span style="font-size:11px;color:var(--muted)">Globale</span>`}
+        <span style="margin-left:8px;font-size:10px;font-weight:700;color:${prioColors[result.todo.priority||"normal"]}">${(result.todo.priority||"normal").toUpperCase()}</span>
+        ${result.todo.dueDate?`<br>📅 Échéance : ${fmtDate(result.todo.dueDate)}`:""}
       </div>
     </div>`;
   }
@@ -2535,6 +2579,40 @@ async function applyDicta(jsonStr){
     const lines=result.sale.lines?.length
       ? result.sale.lines
       : [{product:result.sale.product,qty:result.sale.qty||1,unitHT:result.sale.unitHT||0,totalHT:parseFloat(((result.sale.qty||1)*(result.sale.unitHT||0)).toFixed(2))}];
+
+    // ── Vérification stock disponible ────────────────────────────────────
+    let stockBlocked = false;
+    const stockWarnings = [];
+    for(const l of lines){
+      const m=stock.find(s=>s.name.toLowerCase().includes((l.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));
+      if(m){
+        if(m.qty < l.qty){
+          stockWarnings.push(`⚠ Stock insuffisant pour "${l.product}" : ${m.qty} disponibles, ${l.qty} demandés`);
+          if(m.qty === 0) stockBlocked = true;
+        }
+      } else {
+        stockWarnings.push(`⚠ Produit "${l.product}" introuvable dans le stock`);
+        stockBlocked = true;
+      }
+    }
+
+    if(stockBlocked){
+      closeModal();
+      notify("❌ " + stockWarnings.join(" · ") + " — Vente annulée");
+      document.getElementById("dicta-content") && (document.getElementById("dicta-content").innerHTML=
+        `<div style="background:var(--red-pale);border-radius:10px;padding:16px;text-align:center">
+          <div style="font-size:24px;margin-bottom:8px">🚫</div>
+          <div style="font-weight:700;color:var(--red);margin-bottom:8px">Stock insuffisant</div>
+          ${stockWarnings.map(w=>`<div style="font-size:12px;color:var(--muted);margin-bottom:4px">${w}</div>`).join("")}
+          <button class="btn btn-secondary" style="margin-top:12px" onclick="closeModal()">Fermer</button>
+        </div>`);
+      return;
+    }
+    if(stockWarnings.length > 0){
+      // Stock insuffisant mais pas à 0 — avertir mais continuer
+      stockWarnings.forEach(w=>notify(w));
+    }
+
     const shipping=result.sale.shipping||0;
     const totalTTC=result.sale.totalTTC||parseFloat(((lines.reduce((s,l)=>s+l.totalHT,0)+shipping)*1.2).toFixed(2));
     const num=nextFAC();
@@ -2543,7 +2621,12 @@ async function applyDicta(jsonStr){
     // Deduct stock
     lines.forEach(l=>{
       const m=stock.find(s=>s.name.toLowerCase().includes((l.product||"").toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));
-      if(m){stock=stock.map(s=>String(s.id)===String(m.id)?{...s,qty:Math.max(0,s.qty-l.qty)}:s);dbPatch("stock",{id:m.id,qty:Math.max(0,m.qty-l.qty),name:m.name,reserved:m.reserved||0,unit_cost_ht:m.unitCostHT,shopify_linked:m.shopifyLinked||false,last_update:today});}
+      if(m){
+        const newQty=Math.max(0,m.qty-l.qty);
+        stock=stock.map(s=>String(s.id)===String(m.id)?{...s,qty:newQty}:s);
+        dbPatch("stock",{id:m.id,qty:newQty,name:m.name,reserved:m.reserved||0,unit_cost_ht:m.unitCostHT,shopify_linked:m.shopifyLinked||false,last_update:today});
+        if(m.shopifyVariantId) syncStockToShopify({...m,qty:newQty});
+      }
     });
     // Save sale
     const saleRow={invoice_num:ns.invoiceNum,global_seq:ns.globalSeq,client_id:ns.clientId,client_name:ns.client,product:ns.product,lines:ns._lines,qty:ns.qty,unit_ht:ns.unitHT,shipping:ns.shipping,total_ttc:ns.totalTTC,date:today,source:"manual"};
@@ -2589,6 +2672,29 @@ async function applyDicta(jsonStr){
     if(m){changeStatus(m.id,result.purchaseStatus.newStatus);msgs.push("🔄 Statut mis à jour");}
   }
 
+  // ── Créer une todo ───────────────────────────────────────────────────────
+  if(result.action==="create_todo"&&result.todo?.title){
+    const td=result.todo;
+    const assignee=td.assignedTo?allUsers.find(u=>u.display_name.toLowerCase()===td.assignedTo.toLowerCase()):null;
+    const newTodo={
+      id:"tmp-"+Date.now(),
+      title:td.title,
+      description:td.description||"",
+      assigned_to:assignee?.id||null,
+      created_by:currentUser?.id||null,
+      priority:td.priority||"normal",
+      status:"todo",
+      due_date:td.dueDate||null,
+      is_global:!assignee||(td.isGlobal===true),
+      created_at:new Date().toISOString(),
+    };
+    todos=[newTodo,...todos];
+    const isValid=v=>v&&/^[0-9a-f-]{36}$/i.test(String(v));
+    const row={title:newTodo.title,description:newTodo.description||null,assigned_to:isValid(newTodo.assigned_to)?newTodo.assigned_to:null,created_by:isValid(newTodo.created_by)?newTodo.created_by:null,due_date:newTodo.due_date||null,priority:newTodo.priority,status:"todo",is_global:newTodo.is_global};
+    const resTodo=await dbPost("todos",row);if(resTodo&&resTodo[0])newTodo.id=resTodo[0].id;
+    msgs.push(`✅ Tâche "${td.title}"${assignee?" → "+assignee.display_name:" (globale)"}`);
+  }
+
   // ── Créer un RDV ─────────────────────────────────────────────────────────
   if(result.action==="create_rdv"&&result.rdv?.title){
     const r=result.rdv;
@@ -2613,6 +2719,7 @@ async function applyDicta(jsonStr){
   closeModal();
   renderDashboard();renderVentes();renderAchats();renderStock();
   if(document.getElementById("rdv-body")) renderRdv();
+  if(document.getElementById("todo-board")) renderTodo();
   notify("🎙 "+(msgs.join(" · ")||"Action effectuée"));
 }
 
