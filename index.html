@@ -1175,58 +1175,85 @@ async function reloadStock(){
   renderStock();
 }
 function getStockWithStatus(){
-  // Précalculer : pour chaque ligne d'achat, quel stock correspond ?
-  // On construit un index : stockId → {livraison:[], preparation:[], local:[]}
+  // Construire une liste étendue : stock réel + produits virtuels des achats sans linkedStockId
+  const virtualStock=[...stock];
+  const virtualIndex={}; // nom normalisé → stockItem
+
+  stock.forEach(s=>{ virtualIndex[normalize(s.name)]=s; });
+
+  // Pour chaque ligne d'achat sans linkedStockId, créer un item virtuel si besoin
+  purchases.forEach(p=>{
+    if(!["livraison","preparation","local"].includes(p.stockStatus))return;
+    (p._lines||[]).forEach(l=>{
+      if(l.linkedStockId)return; // déjà lié
+      if(!l.product)return;
+      const nname=normalize(l.product);
+      if(!virtualIndex[nname]){
+        // Créer un item virtuel pour ce produit
+        const vItem={
+          id:"virtual-"+nname.replace(/\s/g,"-"),
+          name:l.product,qty:0,reserved:0,
+          unitCostHT:l.unitHT||0,
+          shopifyLinked:false,lastUpdate:p.date,
+          _virtual:true
+        };
+        virtualStock.push(vItem);
+        virtualIndex[nname]=vItem;
+      }
+    });
+    // Fallback sans _lines
+    if((!p._lines||!p._lines.length)&&!p.linkedStockId&&p.description){
+      const nname=normalize(p.description.replace(/^\d+x\s*/,""));
+      if(!virtualIndex[nname]){
+        const vItem={
+          id:"virtual-"+nname.replace(/\s/g,"-"),
+          name:p.description.replace(/^\d+x\s*/,""),qty:0,reserved:0,
+          unitCostHT:p.unitHT||0,shopifyLinked:false,lastUpdate:p.date,_virtual:true
+        };
+        virtualStock.push(vItem);
+        virtualIndex[nname]=vItem;
+      }
+    }
+  });
+
+  // Construire l'index
   const index={};
-  stock.forEach(s=>{ index[String(s.id)]={liv:[],prep:[],loc:[]}; });
+  virtualStock.forEach(s=>{ index[String(s.id)]={liv:[],prep:[],loc:[]}; });
 
   purchases.forEach(p=>{
     const status=p.stockStatus;
     if(!["livraison","preparation","local"].includes(status))return;
     (p._lines||[]).forEach(l=>{
       let sid=null;
-      if(l.linkedStockId){
+      if(l.linkedStockId&&index[String(l.linkedStockId)]){
         sid=String(l.linkedStockId);
       } else if(l.product){
-        // Fallback: fuzzyMatch par nom
-        const match=fuzzyMatch(l.product,stock,'name');
-        if(match)sid=String(match.id);
-      }
-      if(!sid){
-        // Fallback exact par nom si pas de linkedStockId
-        if(l.product){
-          const m=stock.find(s=>normalize(s.name)===normalize(l.product));
-          if(m)sid=String(m.id);
-        }
+        const m=virtualIndex[normalize(l.product)];
+        if(m)sid=String(m.id);
       }
       if(!sid||!index[sid])return;
       if(status==="livraison")index[sid].liv.push(l);
       else if(status==="preparation")index[sid].prep.push(l);
       else if(status==="local")index[sid].loc.push(l);
     });
-    // Fallback si pas de _lines : utiliser linkedStockId de l'achat
-    if((!p._lines||!p._lines.length)&&p.linkedStockId){
+    if((!p._lines||!p._lines.length)&&p.linkedStockId&&index[String(p.linkedStockId)]){
       const sid=String(p.linkedStockId);
-      if(index[sid]){
-        const fakeL={qty:p.qty||0,unitHT:p.unitHT||0,product:p.description};
-        if(status==="livraison")index[sid].liv.push(fakeL);
-        else if(status==="preparation")index[sid].prep.push(fakeL);
-        else if(status==="local")index[sid].loc.push(fakeL);
-      }
+      const fakeL={qty:p.qty||0,unitHT:p.unitHT||0,product:p.description};
+      if(status==="livraison")index[sid].liv.push(fakeL);
+      else if(status==="preparation")index[sid].prep.push(fakeL);
+      else if(status==="local")index[sid].loc.push(fakeL);
     }
   });
 
-  return stock.map(s=>{
+  return virtualStock.map(s=>{
     const sid=String(s.id);
     const entry=index[sid]||{liv:[],prep:[],loc:[]};
-
     const qtyLiv=entry.liv.reduce((t,l)=>t+l.qty,0);
     const qtyPrep=entry.prep.reduce((t,l)=>t+l.qty,0);
     const totalValLiv=entry.liv.reduce((t,l)=>t+l.qty*(l.unitHT||0),0);
     const costLiv=qtyLiv>0?totalValLiv/qtyLiv:0;
     const totalValPrep=entry.prep.reduce((t,l)=>t+l.qty*(l.unitHT||0),0);
     const costPrep=qtyPrep>0?totalValPrep/qtyPrep:0;
-
     return {...s,qtyLiv,qtyPrep,costLiv,costPrep};
   });
 }
