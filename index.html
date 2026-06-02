@@ -267,7 +267,10 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
   <div class="page" id="page-achats">
     <div class="page-hdr">
       <div><div class="page-title">Achats & Charges</div><div class="page-sub" id="achats-sub">—</div></div>
-      <button class="btn btn-primary" onclick="openAddPurchase()">+ Nouvel achat</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="openManageSuppliers()">🏭 Fournisseurs</button>
+        <button class="btn btn-primary" onclick="openAddPurchase()">+ Nouvel achat</button>
+      </div>
     </div>
     <div class="tbl-wrap">
       <table><thead><tr><th>Fournisseur</th><th>Description</th><th>Produit lié</th><th>Quantité</th><th>Prix unit. HT</th><th>Total HT</th><th id="achats-date-th" style="cursor:pointer">Date ↓</th><th>Statut stock</th><th>Facture</th><th>Supprimer</th></tr></thead>
@@ -1998,6 +2001,89 @@ function submitCreateInvoice(){
 }
 
 // ═══════════════════════════ MODALS — FOURNISSEUR ═════════════════════════════
+function openManageSuppliers(){
+  function renderSupplierList(){
+    return suppliers.length===0
+      ?`<div class="empty-state" style="padding:30px">Aucun fournisseur enregistré</div>`
+      :suppliers.map(s=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:700;font-size:14px">${s.name}</div>
+            <div style="font-size:12px;color:var(--muted)">${[s.contact,s.email,s.phone].filter(Boolean).join(" · ")||"—"}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-secondary" onclick="openEditSupplierInline('${s.id}')">✏️</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteSupplierInline('${s.id}')">✕</button>
+          </div>
+        </div>`).join("");
+  }
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
+    <div class="modal-hdr"><div class="modal-title">🏭 Gérer les fournisseurs</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div id="supplier-list-wrap">${renderSupplierList()}</div>
+    <hr class="div"/>
+    <div id="supplier-form-wrap">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:10px">Ajouter un fournisseur</div>
+      <div class="field"><label>Nom *</label><input class="input" id="ns-name" placeholder="Ex: GDD Export"/></div>
+      <div class="row2">
+        <div class="field"><label>Email</label><input class="input" type="email" id="ns-email" placeholder="contact@fourni.fr"/></div>
+        <div class="field"><label>Téléphone</label><input class="input" id="ns-phone" placeholder="01 23 45 67 89"/></div>
+      </div>
+      <div class="field"><label>Contact</label><input class="input" id="ns-contact" placeholder="Nom du contact"/></div>
+      <button class="btn btn-primary" style="width:100%" onclick="addSupplierInline()">+ Ajouter</button>
+    </div>
+  </div></div>`);
+  window._refreshSupplierModal=()=>{
+    const wrap=document.getElementById("supplier-list-wrap");
+    if(wrap)wrap.innerHTML=renderSupplierList();
+  };
+}
+function addSupplierInline(){
+  const name=document.getElementById("ns-name")?.value.trim();
+  if(!name){notify("⚠ Nom obligatoire");return;}
+  const ns={id:Date.now(),name,email:document.getElementById("ns-email")?.value.trim()||"",phone:document.getElementById("ns-phone")?.value.trim()||"",contact:document.getElementById("ns-contact")?.value.trim()||""};
+  suppliers=[...suppliers,ns];
+  dbPost("suppliers",{name:ns.name,email:ns.email||null,phone:ns.phone||null,contact:ns.contact||null}).then(r=>{if(r&&r[0])ns.id=r[0].id;});
+  document.getElementById("ns-name").value="";
+  document.getElementById("ns-email").value="";
+  document.getElementById("ns-phone").value="";
+  document.getElementById("ns-contact").value="";
+  window._refreshSupplierModal?.();
+  notify(`✅ Fournisseur "${name}" ajouté`);
+}
+function openEditSupplierInline(id){
+  const s=suppliers.find(x=>String(x.id)===String(id));if(!s)return;
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">✏️ Modifier fournisseur</div><button class="modal-close" onclick="openManageSuppliers()">←</button></div>
+    <div class="field"><label>Nom *</label><input class="input" id="es-name" value="${s.name}"/></div>
+    <div class="row2">
+      <div class="field"><label>Email</label><input class="input" type="email" id="es-email" value="${s.email||""}"/></div>
+      <div class="field"><label>Téléphone</label><input class="input" id="es-phone" value="${s.phone||""}"/></div>
+    </div>
+    <div class="field"><label>Contact</label><input class="input" id="es-contact" value="${s.contact||""}"/></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="submitEditSupplierInline('${id}')">Enregistrer</button>
+      <button class="btn btn-secondary" onclick="openManageSuppliers()">Annuler</button>
+    </div>
+  </div></div>`);
+}
+function submitEditSupplierInline(id){
+  const name=document.getElementById("es-name").value.trim();
+  if(!name){notify("⚠ Nom obligatoire");return;}
+  const data={name,email:document.getElementById("es-email").value.trim(),phone:document.getElementById("es-phone").value.trim(),contact:document.getElementById("es-contact").value.trim()};
+  suppliers=suppliers.map(s=>String(s.id)===String(id)?{...s,...data}:s);
+  purchases=purchases.map(p=>String(p.supplierId)===String(id)?{...p,supplier:name}:p);
+  dbPatch("suppliers",{id,...data});
+  openManageSuppliers();
+  notify("✅ Fournisseur mis à jour");
+}
+function deleteSupplierInline(id){
+  const s=suppliers.find(x=>String(x.id)===String(id));
+  if(!confirm(`Supprimer "${s?.name}" ?`))return;
+  suppliers=suppliers.filter(x=>String(x.id)!==String(id));
+  dbDelete("suppliers",id);
+  window._refreshSupplierModal?.();
+  notify("🗑 Fournisseur supprimé");
+}
 function openSupplierDetail(id){
   const s=suppliers.find(x=>String(x.id)===String(id));if(!s)return;
   const hist=purchases.filter(p=>String(p.supplierId)===String(id));
