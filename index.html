@@ -2352,13 +2352,50 @@ function openDicta(){
 function startRec(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><p style="color:var(--red);font-weight:700;margin-bottom:14px">Utilisez Chrome pour la reconnaissance vocale.</p><button class="btn btn-secondary" onclick="showManual()">✏️ Saisir manuellement</button></div>`;return;}
-  document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><div style="font-size:48px;margin-bottom:10px">🔴</div><p style="font-weight:800;font-size:16px;color:var(--navy);margin-bottom:6px">Enregistrement…</p><p style="color:var(--muted);font-size:13px;margin-bottom:20px">Parlez clairement</p><button class="btn btn-ghost" onclick="stopRec()">⏹ Arrêter</button></div>`;
-  recognition=new SR();recognition.lang="fr-FR";recognition.continuous=false;recognition.interimResults=false;
-  recognition.onresult=e=>showTranscript(e.results[0][0].transcript);
-  recognition.onerror=e=>{if(e.error==="aborted"||e.error==="no-speech"||!recognition)return;document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><p style="color:var(--red)">Erreur microphone (${e.error}).</p><br><button class="btn btn-secondary" onclick="showManual()">Saisir manuellement</button></div>`;};
+  window._lastTranscript="";
+  recognition=new SR();
+  recognition.lang="fr-FR";
+  recognition.continuous=true;
+  recognition.interimResults=true;
+  recognition.onresult=e=>{
+    let txt="";
+    for(let i=0;i<e.results.length;i++) txt+=e.results[i][0].transcript+" ";
+    window._lastTranscript=txt.trim();
+    const el=document.getElementById("dicta-transcript");
+    if(el)el.textContent='"'+window._lastTranscript+'"';
+  };
+  recognition.onerror=e=>{
+    if(!recognition||e.error==="aborted"||e.error==="no-speech")return;
+    recognition=null;
+    document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><p style="color:var(--red)">Erreur : ${e.error}.</p><br><button class="btn btn-secondary" onclick="showManual()">Saisir manuellement</button></div>`;
+  };
   recognition.start();
+  document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px">
+    <div style="font-size:48px;margin-bottom:10px">🔴</div>
+    <p style="font-weight:800;font-size:16px;color:var(--navy);margin-bottom:6px">Enregistrement…</p>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Parlez, puis cliquez ✅ Terminer</p>
+    <div id="dicta-transcript" style="min-height:40px;background:#f7f8fc;border-radius:9px;padding:10px;margin-bottom:16px;font-size:13px;color:var(--navy);font-style:italic">En attente…</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-primary" onclick="stopRecAndAnalyze()">✅ Terminer</button>
+      <button class="btn btn-ghost" onclick="stopRec()">✕ Annuler</button>
+    </div>
+  </div>`;
 }
-function stopRec(){recognition=null;document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><p style="font-weight:700;color:var(--navy);margin-bottom:14px">⏹ Enregistrement arrêté.</p><div style="display:flex;gap:10px;justify-content:center"><button class="btn btn-primary" onclick="startRec()">🎙 Réessayer</button><button class="btn btn-secondary" onclick="showManual()">✏️ Saisir manuellement</button></div></div>`;try{if(recognition)recognition.abort();}catch(e){}}
+function stopRec(){
+  const r=recognition;recognition=null;
+  try{if(r)r.abort();}catch(e){}
+  document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><p style="color:var(--muted);margin-bottom:14px">Enregistrement annulé.</p><button class="btn btn-primary" onclick="startRec()">🎙 Réessayer</button></div>`;
+}
+function stopRecAndAnalyze(){
+  const r=recognition;recognition=null;
+  try{if(r)r.stop();}catch(e){}
+  const txt=window._lastTranscript||"";
+  if(!txt.trim()){
+    document.getElementById("dicta-content").innerHTML=`<div style="text-align:center;padding:20px"><p style="color:var(--red);margin-bottom:14px">Aucune parole détectée.</p><button class="btn btn-primary" onclick="startRec()">🎙 Réessayer</button></div>`;
+    return;
+  }
+  showTranscript(txt);
+}
 function showManual(){
   document.getElementById("dicta-content").innerHTML=`<div class="field"><label>Tapez votre commande</label><textarea class="input" id="dt-text" rows="4" style="resize:vertical" placeholder="Ex : Le fournisseur Nord est maintenant au local"></textarea></div><div style="display:flex;gap:10px"><button class="btn btn-primary" onclick="analyzeText(document.getElementById('dt-text').value)">Analyser</button><button class="btn btn-secondary" onclick="openDicta()">Retour</button></div>`;
 }
