@@ -2096,6 +2096,67 @@ function submitTodoForm(){
 })();
 loadAllData();
 
+
+// ═══════════════════════════ MODALS — FOURNISSEUR (suite) ════════════════════
+function openEditSupplier(id){
+  const s=suppliers.find(x=>String(x.id)===String(id));if(!s)return;
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">✏️ Modifier fournisseur</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Nom</label><input class="input" id="es-name" value="${s.name}"/></div>
+    <div class="row2"><div class="field"><label>Email</label><input class="input" type="email" id="es-email" value="${s.email||""}"/></div><div class="field"><label>Téléphone</label><input class="input" id="es-phone" value="${s.phone||""}"/></div></div>
+    <div class="field"><label>Contact</label><input class="input" id="es-contact" value="${s.contact||""}"/></div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitEditSupplier('${id}')">Enregistrer</button>
+  </div></div>`);
+}
+function submitEditSupplier(id){
+  const name=document.getElementById("es-name").value.trim();if(!name){notify("⚠ Nom obligatoire");return;}
+  suppliers=suppliers.map(s=>String(s.id)===String(id)?{...s,name,email:document.getElementById("es-email").value.trim(),phone:document.getElementById("es-phone").value.trim(),contact:document.getElementById("es-contact").value.trim()}:s);
+  purchases=purchases.map(p=>String(p.supplierId)===String(id)?{...p,supplier:name}:p);
+  closeModal();renderAchats();notify("✅ Fournisseur mis à jour");
+}
+function deleteSupplier(id){if(!confirm("Supprimer ce fournisseur ?"))return;suppliers=suppliers.filter(s=>String(s.id)!==String(id));dbDelete("suppliers",id);closeModal();renderAchats();notify("🗑 Fournisseur supprimé");}
+
+// ── DB SAVE HELPERS ──────────────────────────────────────────────────────────
+async function saveClient(clientObj){
+  const row={name:clientObj.name,address:clientObj.address,zip_city:clientObj.zipCity||"",siret:clientObj.siret,tva_intra:clientObj.tvaIntra,email:clientObj.email,phone:clientObj.phone,total_purchases:clientObj.totalPurchases||0};
+  if(clientObj._isNew){const r=await dbPost("clients",row);if(r&&r[0])clientObj.id=r[0].id;}
+  else await dbPatch("clients",{id:clientObj.id,...row});
+}
+async function saveStock(stockItem){
+  const row={name:stockItem.name,qty:stockItem.qty,reserved:stockItem.reserved||0,unit_cost_ht:stockItem.unitCostHT||0,shopify_linked:stockItem.shopifyLinked||false,shopify_product_id:stockItem.shopifyProductId||null,shopify_variant_id:stockItem.shopifyVariantId||null,shopify_multiplier:stockItem.shopifyMultiplier||1,last_update:stockItem.lastUpdate};
+  if(stockItem._isNew){const r=await dbPost("stock",row);if(r&&r[0])stockItem.id=r[0].id;}
+  else await dbPatch("stock",{id:stockItem.id,...row});
+}
+async function saveSale(saleObj){
+  const row={invoice_num:saleObj.invoiceNum,global_seq:saleObj.globalSeq,client_id:saleObj.clientId||null,client_name:saleObj.client,product:saleObj.product,lines:saleObj._lines||[],qty:saleObj.qty,unit_ht:saleObj.unitHT,shipping:saleObj.shipping||0,total_ttc:saleObj.totalTTC,date:saleObj.date,source:saleObj.source||"manual",linked_stock_id:saleObj.linkedStockId||null};
+  if(saleObj._isNew){const r=await dbPost("sales",row);if(r&&r[0])saleObj.id=r[0].id;}
+  else await dbPatch("sales",{id:saleObj.id,...row});
+}
+async function savePurchase(pObj){
+  const row={supplier_id:pObj.supplierId||null,supplier_name:pObj.supplier,description:pObj.description,lines:pObj._lines||[],qty:pObj.qty,unit_ht:pObj.unitHT||0,amount_ht:pObj.amountHT,date:pObj.date,has_invoice:pObj.hasInvoice||false,invoice_file:pObj.invoiceFile||null,stock_status:pObj.stockStatus,linked_stock_id:pObj.linkedStockId||null};
+  if(pObj._isNew){const r=await dbPost("purchases",row);if(r&&r[0])pObj.id=r[0].id;}
+  else await dbPatch("purchases",{id:pObj.id,...row});
+}
+async function saveCharge(ch){
+  const row={name:ch.name,type:ch.type,category:ch.category,amount_ht:ch.amountHT,period:ch.period,note:ch.note,active:ch.active!==false};
+  if(ch._isNew){const r=await dbPost("charges",row);if(r&&r[0])ch.id=r[0].id;}
+  else await dbPatch("charges",{id:ch.id,...row});
+}
+async function saveTodo(t){
+  const row={title:t.title,description:t.description||null,assigned_to:t.assigned_to||null,created_by:t.created_by||null,due_date:t.due_date||null,priority:t.priority,status:t.status,is_global:t.is_global||false};
+  if(t._isNew){const r=await dbPost("todos",row);if(r&&r[0])t.id=r[0].id;}
+  else await dbPatch("todos",{id:t.id,...row});
+}
+async function saveSupplier(s){
+  const row={name:s.name,contact:s.contact||null,email:s.email||null,phone:s.phone||null};
+  if(s._isNew){const r=await dbPost("suppliers",row);if(r&&r[0])s.id=r[0].id;}
+  else await dbPatch("suppliers",{id:s.id,...row});
+}
+async function saveCompanyInfo(){
+  const ci=companyInfo;
+  await dbPatch("company_info",{id:1,name:ci.name,legal_form:ci.legalForm,address:ci.address,zip_city:ci.zipCity,siret:ci.siret,tva_intra:ci.tvaIntra,capital:ci.capital,rcs:ci.rcs,email:ci.email,phone:ci.phone,website:ci.website,iban:ci.iban,bic:ci.bic,bank:ci.bank,payment_terms:ci.paymentTerms,late_interest:ci.lateInterest,recovery_fee:ci.recoveryFee});
+}
+
 // Auto-connect Shopify silently on startup
 async function autoConnectShopify(){
   try{
@@ -2109,6 +2170,184 @@ async function autoConnectShopify(){
   }
 }
 autoConnectShopify();
+
+
+// ═══════════════════════════ MODALS — ENTREPRISE & SHOPIFY ═══════════════════
+function openCompanySettings(){
+  const ci=companyInfo;
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
+    <div class="modal-hdr"><div class="modal-title">🏢 Mon entreprise</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div style="font-size:11px;background:var(--orange-pale);border-radius:8px;padding:10px 13px;margin-bottom:16px;color:#c45e0a">Ces informations apparaissent sur toutes vos factures.</div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin-bottom:10px">Identité</div>
+    <div class="row2"><div class="field"><label>Nom de l'entreprise</label><input class="input" id="ci-name" value="${ci.name}"/></div><div class="field"><label>Forme juridique</label><input class="input" id="ci-form" value="${ci.legalForm}" placeholder="SAS, SARL, EI…"/></div></div>
+    <div class="row2"><div class="field"><label>Capital social (€)</label><input class="input" id="ci-capital" value="${ci.capital}" placeholder="10000"/></div><div class="field"><label>RCS</label><input class="input" id="ci-rcs" value="${ci.rcs}" placeholder="Paris B 123 456 789"/></div></div>
+    <div class="row2"><div class="field"><label>SIRET *</label><input class="input" id="ci-siret" value="${ci.siret}" placeholder="123 456 789 00012"/></div><div class="field"><label>N° TVA intracommunautaire *</label><input class="input" id="ci-tva" value="${ci.tvaIntra}" placeholder="FR00123456789"/></div></div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin:14px 0 10px">Adresse & contact</div>
+    <div class="field"><label>Adresse</label><input class="input" id="ci-addr" value="${ci.address}" placeholder="12 rue de la Paix"/></div>
+    <div class="row2"><div class="field"><label>Code postal & ville</label><input class="input" id="ci-city" value="${ci.zipCity}" placeholder="75001 Paris"/></div><div class="field"><label>Téléphone</label><input class="input" id="ci-phone" value="${ci.phone}"/></div></div>
+    <div class="row2"><div class="field"><label>Email</label><input class="input" type="email" id="ci-email" value="${ci.email}"/></div><div class="field"><label>Site web</label><input class="input" id="ci-web" value="${ci.website}"/></div></div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--light);margin:14px 0 10px">Banque & paiement</div>
+    <div class="row2"><div class="field"><label>IBAN</label><input class="input" id="ci-iban" value="${ci.iban}" placeholder="FR76 XXXX XXXX"/></div><div class="field"><label>BIC</label><input class="input" id="ci-bic" value="${ci.bic}" placeholder="BNPAFRPP"/></div></div>
+    <div class="row2"><div class="field"><label>Banque</label><input class="input" id="ci-bank" value="${ci.bank}"/></div><div class="field"><label>Délai de paiement (jours)</label><input class="input" type="number" id="ci-delay" value="${ci.paymentTerms}"/></div></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:6px" onclick="submitCompanySettings()">💾 Sauvegarder</button>
+  </div></div>`);
+}
+function submitCompanySettings(){
+  companyInfo={name:document.getElementById("ci-name").value,legalForm:document.getElementById("ci-form").value,capital:document.getElementById("ci-capital").value,rcs:document.getElementById("ci-rcs").value,siret:document.getElementById("ci-siret").value,tvaIntra:document.getElementById("ci-tva").value,address:document.getElementById("ci-addr").value,zipCity:document.getElementById("ci-city").value,phone:document.getElementById("ci-phone").value,email:document.getElementById("ci-email").value,website:document.getElementById("ci-web").value,iban:document.getElementById("ci-iban").value,bic:document.getElementById("ci-bic").value,bank:document.getElementById("ci-bank").value,paymentTerms:document.getElementById("ci-delay").value,lateInterest:"3 fois le taux légal",recoveryFee:"40"};
+  closeModal();notify("✅ Informations entreprise sauvegardées");
+  dbPatch("company_info",{id:1,name:companyInfo.name,legal_form:companyInfo.legalForm,address:companyInfo.address,zip_city:companyInfo.zipCity,siret:companyInfo.siret,tva_intra:companyInfo.tvaIntra,capital:companyInfo.capital,rcs:companyInfo.rcs,email:companyInfo.email,phone:companyInfo.phone,website:companyInfo.website,iban:companyInfo.iban,bic:companyInfo.bic,bank:companyInfo.bank,payment_terms:companyInfo.paymentTerms,late_interest:companyInfo.lateInterest,recovery_fee:companyInfo.recoveryFee});
+}
+
+// ═══════════════════════════ SHOPIFY API ═════════════════════════════════════
+function parseShopifyTitle(title) {
+  const match = title.trim().match(/^(\d+)\s+(.+)$/);
+  if (match) { return { multiplier: parseInt(match[1]), name: match[2].trim() }; }
+  return { multiplier: 1, name: title.trim() };
+}
+async function shopifyFetch(endpoint, options = {}) {
+  const res = await fetch(`/api/shopify${endpoint}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (!res.ok) throw new Error(`Shopify API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+async function loadShopifyOrders() {
+  try {
+    notify("⏳ Chargement des commandes Shopify…");
+    const data = await shopifyFetch("/orders.json?status=any&limit=250");
+    const orders = data.orders || [];
+    shopify = orders.map(o => ({
+      id: o.id.toString(),
+      invoiceNum: "",
+      globalSeq: 0,
+      client: `${o.billing_address?.first_name || o.customer?.first_name || ""} ${o.billing_address?.last_name || o.customer?.last_name || ""}`.trim() || o.email || "Client Shopify",
+      clientEmail: o.email,
+      clientPhone: o.phone || o.billing_address?.phone || "",
+      clientAddress: o.billing_address ? `${o.billing_address.address1}, ${o.billing_address.zip} ${o.billing_address.city}` : "",
+      clientSiret: "",
+      product: o.line_items.map(l => `${l.name} x${l.quantity}`).join(", "),
+      lineItems: o.line_items.map(l => {
+        const { multiplier, name } = parseShopifyTitle(l.name);
+        const realQty = l.quantity * multiplier;
+        return { product: name, qty: realQty, shopifyLots: l.quantity, shopifyMultiplier: multiplier,
+          unitHT: parseFloat((parseFloat(l.price) / multiplier / 1.2).toFixed(4)),
+          totalHT: parseFloat((parseFloat(l.price) * l.quantity / 1.2).toFixed(2)) };
+      }),
+      qty: o.line_items.reduce((s, l) => { const { multiplier } = parseShopifyTitle(l.name); return s + l.quantity * multiplier; }, 0),
+      unitHT: parseFloat((parseFloat(o.subtotal_price) / 1.2 / Math.max(1, o.line_items.reduce((s,l)=>s+l.quantity,0))).toFixed(4)),
+      totalTTC: parseFloat(o.total_price),
+      shipping: parseFloat(o.shipping_lines?.reduce((s,l)=>s+parseFloat(l.price||0),0)||0) / 1.2,
+      date: o.created_at.split("T")[0],
+      status: o.financial_status === "paid" ? "paid" : o.financial_status === "refunded" ? "refunded" : "pending",
+      source: "shopify",
+      trackingNumbers: o.fulfillments?.flatMap(f => f.tracking_numbers || []) || [],
+      nbColis: o.fulfillments?.reduce((s, f) => s + (f.tracking_numbers?.length || (f.status !== "pending" ? 1 : 0)), 0) || 0,
+      shopifyOrderId: o.id,
+      shopifyOrderNumber: o.order_number,
+    }));
+    shopifyConnected = true;
+    renderDashboard();
+    if(document.getElementById("ventes-body")) renderVentes();
+    for(const o of shopify){
+      const existing = await dbGet("sales", `shopify_order_id=eq.${o.shopifyOrderId}&select=id`);
+      const row = { invoice_num: o.invoiceNum||"", global_seq: o.globalSeq||0, client_id: null,
+        client_name: o.client, product: o.product, lines: o.lineItems||[], qty: o.qty||1,
+        unit_ht: o.unitHT||0, shipping: o.shipping||0, total_ttc: o.totalTTC, date: o.date,
+        source: "shopify", shopify_order_id: String(o.shopifyOrderId), linked_stock_id: null };
+      if(!existing||!existing.length){ const res = await dbPost("sales", row); if(res&&res[0]) o.id = res[0].id; }
+    }
+    renderDashboard();
+    notify(`✅ ${orders.length} commandes Shopify chargées`);
+  } catch (err) { notify("❌ Erreur Shopify : " + err.message); console.error(err); }
+}
+async function loadShopifyStock() {
+  try {
+    const data = await shopifyFetch("/products.json?limit=250");
+    const products = data.products || [];
+    let linked = 0, created = 0;
+    for(const p of products) {
+      const { multiplier, name } = parseShopifyTitle(p.title);
+      for(const v of p.variants) {
+        if(v.inventory_management !== "shopify") continue;
+        const existing = stock.find(s => s.shopifyVariantId === v.id || s.name.toLowerCase() === name.toLowerCase());
+        if(existing) {
+          existing.shopifyProductId = p.id; existing.shopifyVariantId = v.id;
+          existing.shopifyLinked = true; existing.shopifyMultiplier = multiplier;
+          await dbPatch("stock", { id: existing.id, name: existing.name, qty: existing.qty,
+            reserved: existing.reserved || 0, unit_cost_ht: existing.unitCostHT || 0,
+            shopify_linked: true, shopify_multiplier: multiplier, last_update: existing.lastUpdate });
+          await syncStockToShopify(existing); linked++;
+        } else {
+          const lotQty = v.inventory_quantity || 0; const realQty = lotQty * multiplier;
+          const newItem = { id: "tmp-" + Date.now() + Math.random(), name, qty: realQty, reserved: 0,
+            unitCostHT: 0, shopifyLinked: true, shopifyProductId: p.id, shopifyVariantId: v.id,
+            shopifyMultiplier: multiplier, lastUpdate: new Date().toISOString().split("T")[0] };
+          stock.push(newItem);
+          const res = await dbPost("stock", { name, qty: realQty, reserved: 0, unit_cost_ht: 0,
+            shopify_linked: true, shopify_multiplier: multiplier, last_update: newItem.lastUpdate });
+          if(res && res[0]) newItem.id = res[0].id; created++;
+        }
+      }
+    }
+    renderStock();
+    notify(`✅ Sync Shopify : ${linked} produits liés, ${created} nouveaux`);
+  } catch (err) { notify("❌ Erreur sync Shopify : " + err.message); console.error(err); }
+}
+async function syncStockToShopify(stockItem) {
+  if (!stockItem?.shopifyVariantId) return;
+  const multiplier = stockItem.shopifyMultiplier || 1;
+  const lotsQty = Math.floor(stockItem.qty / multiplier);
+  try {
+    const variantData = await shopifyFetch(`/variants/${stockItem.shopifyVariantId}.json`);
+    const inventoryItemId = variantData.variant?.inventory_item_id;
+    if (!inventoryItemId) return;
+    const levelsData = await shopifyFetch(`/inventory_levels.json?inventory_item_ids=${inventoryItemId}`);
+    const level = levelsData.inventory_levels?.[0];
+    if (!level) return;
+    await shopifyFetch("/inventory_levels/set.json", { method: "POST",
+      body: JSON.stringify({ location_id: level.location_id, inventory_item_id: inventoryItemId, available: lotsQty }) });
+    notify(`✅ Shopify mis à jour : ${lotsQty} lots (${stockItem.qty} pcs)`);
+  } catch (err) { notify("⚠ Stock ERP mis à jour, Shopify : " + err.message); }
+}
+async function deductShopifyStock(stockItem, qty) {
+  if (!stockItem?.shopifyVariantId) return;
+  try {
+    const variantData = await shopifyFetch(`/variants/${stockItem.shopifyVariantId}.json`);
+    const inventoryItemId = variantData.variant?.inventory_item_id;
+    if (!inventoryItemId) return;
+    const levelsData = await shopifyFetch(`/inventory_levels.json?inventory_item_ids=${inventoryItemId}`);
+    const level = levelsData.inventory_levels?.[0];
+    if (!level) return;
+    const multiplier = stockItem.shopifyMultiplier || 1;
+    const lotsToDeduct = Math.ceil(qty / multiplier);
+    await shopifyFetch("/inventory_levels/adjust.json", { method: "POST",
+      body: JSON.stringify({ location_id: level.location_id, inventory_item_id: inventoryItemId, available_adjustment: -lotsToDeduct }) });
+    notify(`✅ Stock Shopify mis à jour (-${lotsToDeduct} lots / -${qty} pcs)`);
+  } catch (err) { notify("⚠ Stock local mis à jour, Shopify : " + err.message); }
+}
+let shopifyConnected = false;
+function openShopifyConfig(){
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">⚙ Connexion Shopify</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    ${shopifyConnected
+      ? `<div style="background:var(--green-pale);border-radius:9px;padding:13px;margin-bottom:16px;font-size:13px;color:var(--green)">✅ Shopify connecté et actif</div>`
+      : `<div style="background:var(--yellow-pale);border-radius:9px;padding:12px;margin-bottom:16px;font-size:12px;color:#92400e;line-height:1.7">Le token Shopify est configuré côté serveur Netlify. Clique sur "Tester la connexion" pour vérifier.</div>`}
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-primary" onclick="loadShopifyOrders();closeModal()">🔄 Charger les commandes</button>
+      <button class="btn btn-secondary" onclick="loadShopifyStock();closeModal()">📦 Synchroniser le stock</button>
+      <button class="btn btn-secondary" onclick="testShopifyConnection()">🔍 Tester la connexion</button>
+    </div>
+  </div></div>`);
+}
+async function testShopifyConnection(){
+  try {
+    const data = await shopifyFetch("/shop.json");
+    notify(`✅ Connecté à : ${data.shop?.name} (${data.shop?.domain})`);
+    shopifyConnected = true;
+  } catch(err){ notify("❌ Connexion échouée : " + err.message); }
+}
+function submitShopify(){closeModal();renderDashboard();notify("✅ Shopify configuré");}
 
 // ═══════════════════════════ SUPABASE SYNC ═══════════════════════════════════
 const API = "/api/supabase";
