@@ -2357,12 +2357,16 @@ function startRec(){
   recognition.lang="fr-FR";
   recognition.continuous=true;
   recognition.interimResults=true;
+  recognition.maxAlternatives=1;
   recognition.onresult=e=>{
-    let txt="";
-    for(let i=0;i<e.results.length;i++) txt+=e.results[i][0].transcript+" ";
-    window._lastTranscript=txt.trim();
+    let final="", interim="";
+    for(let i=0;i<e.results.length;i++){
+      if(e.results[i].isFinal) final+=e.results[i][0].transcript+" ";
+      else interim+=e.results[i][0].transcript;
+    }
+    window._lastTranscript=(final||interim).trim();
     const el=document.getElementById("dicta-transcript");
-    if(el)el.textContent='"'+window._lastTranscript+'"';
+    if(el)el.innerHTML='<span style="color:var(--navy)">'+( final?'"'+final.trim()+'"':"")+'</span>'+(interim?'<span style="color:var(--light);font-style:italic"> '+interim+'</span>':"");
   };
   recognition.onerror=e=>{
     if(!recognition||e.error==="aborted"||e.error==="no-speech")return;
@@ -2411,46 +2415,24 @@ async function analyzeText(text){
   const knownClients=clients.map(c=>c.name).join(", ");
   const knownSuppliers=suppliers.map(s=>s.name).join(", ");
 
-  const prompt=`Tu es un assistant ERP pour BLC Import (vêtements en lots). Analyse cette commande vocale et retourne UNIQUEMENT un JSON valide, sans markdown, sans backtick, sans texte avant ou après.
+  // Correction phonétique des erreurs courantes avant envoi
+  const corrections={
+    "euro":"€","euros":"€","aura":"€","hurt":"HT","ht":"HT","h t":"HT",
+    "hors taxe":"HT","toutes taxes comprises":"TTC","t t c":"TTC",
+    "préparez":"préparation","prépa":"préparation","livré":"livraison",
+    "bocal":"local","au local":"local","a local":"local",
+    "commande":"commande","fournisseur":"fournisseur",
+  };
+  let cleanText=text.toLowerCase();
+  Object.entries(corrections).forEach(([k,v])=>{ cleanText=cleanText.replaceAll(k,v); });
+  // Remettre la première lettre en majuscule
+  cleanText=cleanText.charAt(0).toUpperCase()+cleanText.slice(1);
 
-Commande: "${text}"
-
-Produits connus dans le stock: ${knownProducts||"aucun"}
-Clients connus: ${knownClients||"aucun"}
-Fournisseurs connus: ${knownSuppliers||"aucun"}
-
-IMPORTANT:
-- Si la commande parle d'une VENTE (client qui commande, acheter à BLC), action = "create_sale"
-- Si la commande parle d'un ACHAT (BLC achète à un fournisseur), action = "create_purchase"  
-- Pour un achat, cherche le fournisseur dans les fournisseurs connus
-- Pour une vente, cherche le client dans les clients connus
-- La LIVRAISON est un frais de port séparé (ex: "4 cartons à 25€" = shipping = 100)
-- Calcule totalTTC = (qty * unitHT + shipping) * 1.2
-- Associe le produit au nom le plus proche dans les produits connus
-
-JSON attendu:
-{
-  "action": "create_sale" | "create_purchase" | "update_purchase_status" | "create_client" | "mixed",
-  "client": {"name": "", "address": "", "siret": "", "email": "", "phone": ""},
-  "sale": {
-    "product": "",
-    "qty": 0,
-    "unitHT": 0,
-    "shipping": 0,
-    "totalTTC": 0,
-    "lines": [{"product":"","qty":0,"unitHT":0,"totalHT":0}]
-  },
-  "purchase": {
-    "supplier": "",
-    "product": "",
-    "qty": 0,
-    "unitHT": 0,
-    "totalHT": 0,
-    "stockStatus": "local" | "livraison" | "preparation"
-  },
-  "purchaseStatus": {"supplier": "", "newStatus": "preparation" | "livraison" | "local"},
-  "summary": "résumé court en français de ce qui va être fait"
-}`;
+  const prompt=`ERP BLC Import (grossiste vêtements). JSON uniquement, pas de markdown.
+Commande: "${cleanText}"
+Stock:${knownProducts||"-"} Clients:${knownClients||"-"} Fournisseurs:${knownSuppliers||"-"}
+Règles: VENTE(client achète)→create_sale ACHAT(BLC achète)→create_purchase. Corrige erreurs phonétiques. totalTTC=(qty*unitHT+shipping)*1.2. stockStatus défaut=local.
+{"action":"create_sale|create_purchase|update_purchase_status","client":{"name":"","address":"","siret":"","email":"","phone":""},"sale":{"product":"","qty":0,"unitHT":0,"shipping":0,"totalTTC":0,"lines":[{"product":"","qty":0,"unitHT":0,"totalHT":0}]},"purchase":{"supplier":"","product":"","qty":0,"unitHT":0,"totalHT":0,"stockStatus":"local"},"purchaseStatus":{"supplier":"","newStatus":"local"},"summary":""}`;
 
   try{
     // Use proxy to avoid CORS
@@ -2458,8 +2440,8 @@ JSON attendu:
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
-        model:"claude-sonnet-4-5",
-        max_tokens:1500,
+        model:"claude-haiku-4-5-20251001",
+        max_tokens:400,
         messages:[{role:"user",content:prompt}]
       })
     });
