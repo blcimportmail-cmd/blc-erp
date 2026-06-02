@@ -1820,38 +1820,46 @@ async function submitClient(id){
 // ═══════════════════════════ MODALS — STOCK ═══════════════════════════════════
 function openAddStock(id){
   const s=id&&id!=='null'?stock.find(x=>String(x.id)===String(id)):null;
-  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
-    <div class="modal-hdr"><div class="modal-title">${s?"Modifier le stock":"Nouveau produit"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
-    <input type="hidden" id="sk-id" value="${s?.id||""}"/>
-    <div class="field"><label>Nom du produit</label><input class="input" id="sk-name" value="${s?.name||""}" placeholder="Ex: TNF Fleece"/></div>
-    ${s ? `
-    <!-- Mode modification : affiche stock actuel + option d'ajout -->
+  const isEdit=!!s;
+  window._stockEditBase=isEdit?{qty:s.qty,cost:s.unitCostHT||0}:null;
+
+  let editSection="";
+  if(isEdit){
+    editSection=`
     <div style="background:#f0f4ff;border-radius:10px;padding:13px;margin-bottom:13px">
       <div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Stock actuel</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
         <div><span style="color:var(--muted)">Quantité :</span> <b>${s.qty} u.</b></div>
-        <div><span style="color:var(--muted)">Coût moyen :</span> <b>${s.unitCostHT?s.unitCostHT.toFixed(2)+"€":"—"}</b></div>
+        <div><span style="color:var(--muted)">Coût moyen :</span> <b>${s.unitCostHT?(s.unitCostHT.toFixed(2)+"€"):"—"}</b></div>
       </div>
     </div>
-    <div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Ajouter des pièces (optionnel)</div>
+    <div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Ajouter des pièces (PMP auto)</div>
     <div class="row2">
       <div class="field"><label>Qté à ajouter</label><input class="input" type="number" id="sk-add-qty" value="0" min="0" oninput="calcNewPMP()"/></div>
-      <div class="field"><label>Prix d'achat HT (€/u)</label><input class="input" type="number" id="sk-add-cost" step="0.01" placeholder="${s.unitCostHT||0}" oninput="calcNewPMP()"/></div>
+      <div class="field"><label>Prix achat HT (€/u)</label><input class="input" type="number" id="sk-add-cost" step="0.01" placeholder="0.00" oninput="calcNewPMP()"/></div>
     </div>
     <div id="pmp-preview" style="display:none;background:var(--green-pale);border-radius:9px;padding:10px 13px;margin-bottom:13px;font-size:12px;color:var(--green)"></div>
     <hr class="div"/>
-    <div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Modifier directement</div>
+    <div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Ou forcer directement</div>
     <div class="row2">
-      <div class="field"><label>Stock total (forcer)</label><input class="input" type="number" id="sk-qty" value="${s.qty}" min="0" placeholder="Laisser vide = auto"/></div>
-      <div class="field"><label>Coût unit. HT (forcer)</label><input class="input" type="number" id="sk-cost" step="0.01" value="${s.unitCostHT||""}" placeholder="Laisser vide = auto"/></div>
-    </div>
-    ` : `
-    <!-- Mode création -->
+      <div class="field"><label>Stock total</label><input class="input" type="number" id="sk-qty" value="${s.qty}" min="0"/></div>
+      <div class="field"><label>Coût unit. HT (€)</label><input class="input" type="number" id="sk-cost" step="0.01" value="${s.unitCostHT||""}"/></div>
+    </div>`;
+  } else {
+    editSection=`
     <div class="row2">
       <div class="field"><label>Quantité initiale</label><input class="input" type="number" id="sk-qty" value="0" min="0"/></div>
       <div class="field"><label>Coût unit. HT (€)</label><input class="input" type="number" id="sk-cost" step="0.01" placeholder="0.00"/></div>
-    </div>
-    `}
+    </div>`;
+  }
+
+  const deleteBtn=isEdit?`<button class="btn btn-danger" onclick="deleteStockItem('${s.id||""}')">🗑 Supprimer</button>`:"";
+
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr"><div class="modal-title">${isEdit?"Modifier le stock":"Nouveau produit"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <input type="hidden" id="sk-id" value="${s?.id||""}"/>
+    <div class="field"><label>Nom du produit</label><input class="input" id="sk-name" value="${s?.name||""}" placeholder="Ex: TNF Fleece"/></div>
+    ${editSection}
     <div class="field"><label>Lié à Shopify</label>
       <select class="input" id="sk-linked">
         <option value="0" ${!s?.shopifyLinked?"selected":""}>Non lié (manuel)</option>
@@ -1860,12 +1868,11 @@ function openAddStock(id){
     </div>
     <div style="display:flex;gap:10px">
       <button class="btn btn-primary" style="flex:1" onclick="submitStockForm()">Enregistrer</button>
-      ${s?`<button class="btn btn-danger" onclick="deleteStockItem('${s.id||""}')">🗑 Supprimer</button>`:""}
+      ${deleteBtn}
     </div>
   </div></div>`);
-  ${s ? "// Init PMP preview
-window._stockEditBase={qty:"+s.qty+",cost:"+(s.unitCostHT||0)+"};":"window._stockEditBase=null;"}
 }
+
 
 function calcNewPMP(){
   const base=window._stockEditBase;if(!base)return;
@@ -1901,6 +1908,58 @@ function deleteStockItem(id){
   notify("🗑 Référence supprimée du stock");
 }
 
+
+// ═══════════════════════════ AUTH ═══════════════════════════════════════════
+const SALT = "BLC_SALT_2024";
+async function hashPwd(pwd) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pwd + SALT);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuffer)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+async function submitLogin(){
+  const username=document.getElementById("login-user").value.trim().toLowerCase();
+  const pwd=document.getElementById("login-pwd").value;
+  const errEl=document.getElementById("login-error");
+  if(!username||!pwd){errEl.style.display="block";errEl.textContent="⚠ Remplissez tous les champs";return;}
+  const hash=await hashPwd(pwd);
+  const passwords={
+    "barto":   "f2c65cfa6f5d96237ada6f8e7933a8bc5013858a254bb07f11f63d6751eecfe1",
+    "coco":    "e22fd8e3c5269144d020ef85d6e2be5393173166959d1ef5b2716441946af26c",
+    "louis":   "c86d7dcb154cc1ebb3b3d320bfde286e935c38d3f700127ccc07638c8ce5c1cd",
+    "thibault":"ddf0da014d92843de9dde66c1ce4744e5f245879374e6ff915c12e8c17a83871",
+  };
+  if(!passwords[username]||passwords[username]!==hash){
+    errEl.style.display="block";errEl.textContent="❌ Identifiants incorrects";return;
+  }
+  currentUser=allUsers.find(u=>u.username===username);
+  sessionStorage.setItem("blc_user",JSON.stringify(currentUser));
+  showUserBar();
+  notify(`👋 Bonjour ${currentUser.display_name} !`);
+}
+
+function showUserBar(){
+  if(!currentUser)return;
+  document.getElementById("login-overlay").style.display="none";
+  const bar=document.getElementById("user-bar");bar.style.display="block";
+  const av=document.getElementById("user-avatar");
+  av.textContent=currentUser.display_name[0].toUpperCase();
+  av.style.background=currentUser.avatar_color;
+  document.getElementById("user-name").textContent=currentUser.display_name;
+  document.getElementById("user-role").textContent=currentUser.role;
+}
+
+function logout(){
+  currentUser=null;
+  sessionStorage.removeItem("blc_user");
+  document.getElementById("login-overlay").style.display="flex";
+  document.getElementById("user-bar").style.display="none";
+  document.getElementById("login-user").value="";
+  document.getElementById("login-pwd").value="";
+}
+
+// ═══════════════════════════ MODAL WRAPPERS ══════════════════════════════════
 function submitStockForm(){
   const id=document.getElementById("sk-id")?.value||null;
   submitStock(id||null);
