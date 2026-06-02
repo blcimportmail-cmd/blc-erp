@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="BLC Dictaphone"/>
+<title>BLC — Dictaphone IA</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--navy:#0F1535;--orange:#F47920;--orange-pale:#fff4ec;--green:#16a34a;--red:#dc2626;--muted:#7a7f96;--border:#e4e6ef;--light:#b0b4c8}
+body{font-family:'Barlow',sans-serif;background:var(--navy);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;color:#fff;overflow:hidden}
+
+/* Header */
+.hdr{padding:16px 20px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08)}
+.hdr-logo{font-size:20px;font-weight:900;color:#fff}.hdr-logo span{color:var(--orange)}
+.hdr-sub{font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase;margin-top:2px}
+.hdr-user{display:flex;align-items:center;gap:8px}
+.hdr-avatar{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff}
+.hdr-name{font-size:12px;font-weight:700;color:rgba(255,255,255,0.7)}
+
+/* Main area */
+.main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px;gap:20px}
+
+/* State: idle */
+#state-idle{display:flex;flex-direction:column;align-items:center;gap:20px;width:100%}
+.mic-btn{width:140px;height:140px;border-radius:50%;background:var(--orange);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:60px;box-shadow:0 8px 40px rgba(244,121,32,0.4);transition:transform 0.15s,box-shadow 0.15s;-webkit-user-select:none}
+.mic-btn:active{transform:scale(0.93);box-shadow:0 4px 20px rgba(244,121,32,0.3)}
+.mic-hint{font-size:13px;color:rgba(255,255,255,0.4);text-align:center;line-height:1.6;max-width:280px}
+.mic-hint em{color:rgba(244,121,32,0.8);font-style:normal}
+
+/* State: recording */
+#state-recording{display:none;flex-direction:column;align-items:center;gap:20px;width:100%}
+.rec-dot{width:24px;height:24px;border-radius:50%;background:var(--red);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(1.2)}}
+.rec-label{font-size:18px;font-weight:800;color:#fff}
+.rec-sub{font-size:13px;color:rgba(255,255,255,0.4)}
+.rec-transcript{min-height:60px;width:100%;background:rgba(255,255,255,0.06);border-radius:14px;padding:16px;font-size:14px;color:rgba(255,255,255,0.9);line-height:1.6;text-align:center;font-style:italic}
+.stop-btn{background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.2);border-radius:14px;padding:16px 40px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Barlow',sans-serif;width:100%;transition:background 0.15s}
+.stop-btn:active{background:rgba(255,255,255,0.2)}
+
+/* State: confirm */
+#state-confirm{display:none;flex-direction:column;gap:14px;width:100%;max-height:70vh;overflow-y:auto}
+.confirm-summary{background:var(--orange);border-radius:14px;padding:16px;font-size:14px;font-weight:700;color:#fff;line-height:1.5}
+.confirm-block{background:rgba(255,255,255,0.07);border-radius:14px;padding:14px;font-size:13px;color:rgba(255,255,255,0.85);line-height:1.7}
+.confirm-block-title{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:8px}
+.confirm-actions{display:flex;flex-direction:column;gap:10px;padding-bottom:20px}
+.btn-confirm{background:var(--orange);border:none;border-radius:14px;padding:18px;color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:'Barlow',sans-serif;width:100%}
+.btn-retry{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.15);border-radius:14px;padding:16px;color:rgba(255,255,255,0.7);font-size:14px;font-weight:700;cursor:pointer;font-family:'Barlow',sans-serif;width:100%}
+
+/* State: analyzing */
+#state-analyzing{display:none;flex-direction:column;align-items:center;gap:16px}
+.analyzing-icon{font-size:48px;animation:spin 1.5s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.analyzing-label{font-size:16px;font-weight:700;color:rgba(255,255,255,0.8)}
+
+/* State: done */
+#state-done{display:none;flex-direction:column;align-items:center;gap:16px;width:100%}
+.done-icon{font-size:64px}
+.done-label{font-size:16px;font-weight:700;color:rgba(255,255,255,0.9);text-align:center}
+.done-msgs{background:rgba(255,255,255,0.07);border-radius:14px;padding:14px;font-size:13px;color:rgba(255,255,255,0.7);line-height:1.8;width:100%;text-align:center}
+.btn-new{background:var(--orange);border:none;border-radius:14px;padding:18px;color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:'Barlow',sans-serif;width:100%;margin-top:4px}
+
+/* Manual input */
+#state-manual{display:none;flex-direction:column;gap:14px;width:100%}
+.manual-textarea{width:100%;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.15);border-radius:14px;padding:16px;font-size:15px;color:#fff;font-family:'Barlow',sans-serif;resize:none;outline:none;min-height:120px}
+.manual-textarea::placeholder{color:rgba(255,255,255,0.3)}
+.manual-textarea:focus{border-color:var(--orange)}
+.btn-analyze{background:var(--orange);border:none;border-radius:14px;padding:18px;color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:'Barlow',sans-serif;width:100%}
+
+/* Login */
+#state-login{display:flex;flex-direction:column;gap:16px;width:100%;padding:8px 0}
+.login-field label{display:block;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px}
+.login-input{width:100%;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;padding:14px 16px;font-size:15px;color:#fff;font-family:'Barlow',sans-serif;outline:none}
+.login-input:focus{border-color:var(--orange)}
+.login-error{background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:12px;font-size:13px;color:#fca5a5;display:none}
+.btn-login{background:var(--orange);border:none;border-radius:14px;padding:18px;color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:'Barlow',sans-serif;width:100%}
+
+/* Toast */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.12);backdrop-filter:blur(10px);color:#fff;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:700;z-index:999;white-space:nowrap;border:1px solid rgba(255,255,255,0.15)}
+
+/* Bottom manual btn */
+.manual-toggle{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:10px 20px;color:rgba(255,255,255,0.4);font-size:12px;font-weight:700;cursor:pointer;font-family:'Barlow',sans-serif;white-space:nowrap}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div>
+    <div class="hdr-logo">BL<span>C</span> <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:3px">IMPORT</span></div>
+    <div class="hdr-sub">Dictaphone IA</div>
+  </div>
+  <div class="hdr-user" id="hdr-user" style="display:none">
+    <div class="hdr-avatar" id="hdr-avatar"></div>
+    <div class="hdr-name" id="hdr-name"></div>
+  </div>
+</div>
+
+<div class="main" id="main-area">
+
+  <!-- LOGIN -->
+  <div id="state-login" style="display:flex;flex-direction:column;gap:16px;width:100%;padding:8px 0">
+    <div style="text-align:center;margin-bottom:8px">
+      <div style="font-size:48px;margin-bottom:12px">🔐</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:4px">Connexion</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4)">Accès réservé à l'équipe BLC</div>
+    </div>
+    <div id="login-error" class="login-error">❌ Identifiants incorrects</div>
+    <div class="login-field"><label>Identifiant</label><input class="login-input" id="login-user" placeholder="Ex: barto" autocomplete="username" autocapitalize="none"/></div>
+    <div class="login-field"><label>Mot de passe</label><input class="login-input" type="password" id="login-pwd" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+    <button class="btn-login" onclick="doLogin()">Se connecter</button>
+  </div>
+
+  <!-- IDLE -->
+  <div id="state-idle" style="display:none;flex-direction:column;align-items:center;gap:20px;width:100%">
+    <button class="mic-btn" onclick="startRec()">🎙</button>
+    <div class="mic-hint">
+      Appuyez pour parler<br/>
+      <em>"Vendre 100 Dickies à Teddy à 12€"</em><br/>
+      <em>"Tâche pour Louis : appeler fournisseur"</em><br/>
+      <em>"RDV avec Boutique Rosa demain à 14h"</em>
+    </div>
+  </div>
+
+  <!-- RECORDING -->
+  <div id="state-recording" style="display:none;flex-direction:column;align-items:center;gap:20px;width:100%">
+    <div class="rec-dot"></div>
+    <div class="rec-label">Enregistrement…</div>
+    <div class="rec-sub">Parlez, puis appuyez Terminer</div>
+    <div class="rec-transcript" id="rec-transcript">En attente…</div>
+    <button class="stop-btn" onclick="stopAndAnalyze()">✅ Terminer</button>
+    <button style="background:transparent;border:none;color:rgba(255,255,255,0.3);font-size:13px;cursor:pointer;font-family:'Barlow',sans-serif" onclick="cancelRec()">✕ Annuler</button>
+  </div>
+
+  <!-- ANALYZING -->
+  <div id="state-analyzing" style="display:none;flex-direction:column;align-items:center;gap:16px">
+    <div class="analyzing-icon">⚡</div>
+    <div class="analyzing-label">Analyse en cours…</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.3)">L'IA interprète votre commande</div>
+  </div>
+
+  <!-- CONFIRM -->
+  <div id="state-confirm" style="display:none;flex-direction:column;gap:14px;width:100%;overflow-y:auto;max-height:calc(100dvh - 140px)">
+    <div class="confirm-summary" id="confirm-summary"></div>
+    <div id="confirm-blocks"></div>
+    <div class="confirm-actions">
+      <button class="btn-confirm" onclick="doApply()">✅ Confirmer</button>
+      <button class="btn-retry" onclick="showState('idle')">🔁 Recommencer</button>
+    </div>
+  </div>
+
+  <!-- DONE -->
+  <div id="state-done" style="display:none;flex-direction:column;align-items:center;gap:16px;width:100%">
+    <div class="done-icon">✅</div>
+    <div class="done-label" id="done-label">Action effectuée !</div>
+    <div class="done-msgs" id="done-msgs"></div>
+    <button class="btn-new" onclick="showState('idle')">🎙 Nouvelle commande</button>
+  </div>
+
+  <!-- MANUAL -->
+  <div id="state-manual" style="display:none;flex-direction:column;gap:14px;width:100%">
+    <div style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px">Saisie manuelle</div>
+    <textarea class="manual-textarea" id="manual-text" rows="5" placeholder="Ex: Vendre 100 Dickies à Teddy à 12€ HT"></textarea>
+    <button class="btn-analyze" onclick="analyzeText(document.getElementById('manual-text').value)">⚡ Analyser</button>
+    <button style="background:transparent;border:none;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer;font-family:'Barlow',sans-serif;text-align:center" onclick="showState('idle')">← Retour</button>
+  </div>
+
+</div>
+
+<!-- Toggle manuel (visible sauf sur confirm/done/analyzing) -->
+<button class="manual-toggle" id="manual-toggle" onclick="showState('manual')">✏️ Saisir manuellement</button>
+
+<script>
+// ══ CONFIG ════════════════════════════════════════════════════════════════════
+const API_BASE = "/api/supabase";
+const SALT = "BLC_SALT_2024";
+
+// ══ STATE ═════════════════════════════════════════════════════════════════════
+let currentUser = null;
+let recognition = null;
+let lastTranscript = "";
+let pendingResult = null;
+
+// Data (chargé depuis Supabase)
+let stock=[], clients=[], suppliers=[], purchases=[], sales=[], todos=[], rdvList=[];
+let allUsers=[
+  {id:"u1",username:"barto",   display_name:"Barto",    role:"admin",         avatar_color:"#F47920"},
+  {id:"u2",username:"coco",    display_name:"Coco",     role:"collaborateur", avatar_color:"#2563eb"},
+  {id:"u3",username:"louis",   display_name:"Louis",    role:"collaborateur", avatar_color:"#16a34a"},
+  {id:"u4",username:"thibault",display_name:"Thibault", role:"collaborateur", avatar_color:"#8b5cf6"},
+];
+let globalInvCounter=0;
+
+// ══ HELPERS ═══════════════════════════════════════════════════════════════════
+const fmtEur = n => Number(n).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
+const fmtDate = d => new Date(d).toLocaleDateString("fr-FR");
+const nextFAC = () => { globalInvCounter++; return `FAC-${String(globalInvCounter).padStart(3,"0")}`; };
+
+function normalize(str){
+  return (str||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+}
+function fuzzyMatch(input,list,key){
+  if(!input||!list.length)return null;
+  const ni=normalize(input);
+  let match=list.find(x=>normalize(x[key])===ni);if(match)return match;
+  match=list.find(x=>normalize(x[key]).includes(ni)||ni.includes(normalize(x[key])));if(match)return match;
+  const wordsI=ni.split(" ").filter(w=>w.length>2);
+  let best=null,bestScore=0;
+  list.forEach(x=>{
+    const wordsX=normalize(x[key]).split(" ").filter(w=>w.length>2);
+    const common=wordsI.filter(w=>wordsX.some(wx=>wx.includes(w)||w.includes(wx)));
+    const score=common.length/(Math.max(wordsI.length,wordsX.length)||1);
+    if(score>bestScore&&score>=0.5){bestScore=score;best=x;}
+  });
+  return best;
+}
+
+function toast(msg,duration=3000){
+  const el=document.createElement("div");el.className="toast";el.textContent=msg;
+  document.body.appendChild(el);setTimeout(()=>el.remove(),duration);
+}
+
+function showState(state){
+  ["login","idle","recording","analyzing","confirm","done","manual"].forEach(s=>{
+    const el=document.getElementById("state-"+s);
+    if(el)el.style.display="none";
+  });
+  const target=document.getElementById("state-"+state);
+  if(target)target.style.display="flex";
+  // Masquer le bouton manuel sur certains états
+  const manualToggle=document.getElementById("manual-toggle");
+  if(manualToggle)manualToggle.style.display=["idle","recording"].includes(state)?"block":"none";
+}
+
+// ══ AUTH ══════════════════════════════════════════════════════════════════════
+async function hashPwd(pwd){
+  const data=new TextEncoder().encode(pwd+SALT);
+  const buf=await crypto.subtle.digest("SHA-256",data);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+async function doLogin(){
+  const username=document.getElementById("login-user").value.trim().toLowerCase();
+  const pwd=document.getElementById("login-pwd").value;
+  const errEl=document.getElementById("login-error");
+  errEl.style.display="none";
+  if(!username||!pwd){errEl.style.display="block";errEl.textContent="⚠ Remplissez tous les champs";return;}
+  const hash=await hashPwd(pwd);
+  const passwords={
+    "barto":  "f2c65cfa6f5d96237ada6f8e7933a8bc5013858a254bb07f11f63d6751eecfe1",
+    "coco":   "e22fd8e3c5269144d020ef85d6e2be5393173166959d1ef5b2716441946af26c",
+    "louis":  "c86d7dcb154cc1ebb3b3d320bfde286e935c38d3f700127ccc07638c8ce5c1cd",
+    "thibault":"ddf0da014d92843de9dde66c1ce4744e5f245879374e6ff915c12e8c17a83871",
+  };
+  if(!passwords[username]||passwords[username]!==hash){
+    errEl.style.display="block";errEl.textContent="❌ Identifiants incorrects";return;
+  }
+  currentUser=allUsers.find(u=>u.username===username);
+  sessionStorage.setItem("blc_dicta_user",JSON.stringify(currentUser));
+  showUserBar();
+  await loadData();
+  showState("idle");
+}
+
+function showUserBar(){
+  if(!currentUser)return;
+  const bar=document.getElementById("hdr-user");bar.style.display="flex";
+  const av=document.getElementById("hdr-avatar");
+  av.textContent=currentUser.display_name[0].toUpperCase();
+  av.style.background=currentUser.avatar_color;
+  document.getElementById("hdr-name").textContent=currentUser.display_name;
+}
+
+// ══ DATA ══════════════════════════════════════════════════════════════════════
+async function dbGet(table,query=""){
+  try{const res=await fetch(`${API_BASE}/data/${table}${query?"?"+query:""}`,{method:"GET"});if(!res.ok)return[];return await res.json()||[];}catch(e){return[];}
+}
+async function dbPost(table,body){
+  try{const res=await fetch(`${API_BASE}/data/${table}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});return await res.json();}catch(e){return null;}
+}
+async function dbPatch(table,body){
+  try{const res=await fetch(`${API_BASE}/data/${table}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});return await res.json();}catch(e){return null;}
+}
+async function dbRpc(fn,params){
+  try{const res=await fetch(`${API_BASE}/rpc/${fn}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(params)});return await res.json();}catch(e){return null;}
+}
+
+function rowToStock(r){return{id:r.id,name:r.name,qty:r.qty||0,reserved:r.reserved||0,unitCostHT:parseFloat(r.unit_cost_ht||0),shopifyLinked:r.shopify_linked||false,shopifyVariantId:r.shopify_variant_id,shopifyMultiplier:r.shopify_multiplier||1,lastUpdate:r.last_update};}
+function rowToClient(r){return{id:r.id,name:r.name,address:r.address||"",zipCity:r.zip_city||"",siret:r.siret||"",tvaIntra:r.tva_intra||"",email:r.email||"",phone:r.phone||"",totalPurchases:parseFloat(r.total_purchases||0)};}
+function rowToSupplier(r){return{id:r.id,name:r.name,contact:r.contact||"",email:r.email||"",phone:r.phone||""};}
+function rowToPurchase(r){return{id:r.id,supplier:r.supplier_name,supplierId:r.supplier_id,description:r.description,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),amountHT:parseFloat(r.amount_ht||0),date:r.date,stockStatus:r.stock_status,linkedStockId:r.linked_stock_id};}
+function rowToTodo(r){return{id:r.id,title:r.title,description:r.description,assigned_to:r.assigned_to,created_by:r.created_by,due_date:r.due_date,priority:r.priority||"normal",status:r.status||"todo",is_global:r.is_global,created_at:r.created_at};}
+function rowToRdv(r){return{id:r.id,title:r.title,date:r.date,time:r.time?r.time.slice(0,5):null,endTime:r.end_time?r.end_time.slice(0,5):null,clientId:r.client_id,clientName:r.client_name||"",notes:r.notes||"",source:r.source||"manual"};}
+
+async function loadData(){
+  toast("⏳ Chargement…",1500);
+  const [stk,cls,sups,purch,usrs,ctr]=await Promise.all([
+    dbGet("stock","order=name"),
+    dbGet("clients","order=name"),
+    dbGet("suppliers","order=name"),
+    dbGet("purchases","order=created_at.desc"),
+    dbGet("blc_users","select=id,username,display_name,role,avatar_color"),
+    dbGet("invoice_counter","id=eq.1"),
+  ]);
+  stock=Array.isArray(stk)?stk.map(rowToStock):[];
+  clients=Array.isArray(cls)?cls.map(rowToClient):[];
+  suppliers=Array.isArray(sups)?sups.map(rowToSupplier):[];
+  purchases=Array.isArray(purch)?purch.map(rowToPurchase):[];
+  if(Array.isArray(usrs)&&usrs.length>0){
+    allUsers=usrs.map(u=>({id:u.id,username:u.username,display_name:u.display_name,role:u.role,avatar_color:u.avatar_color||"#F47920"}));
+    if(currentUser){const m=allUsers.find(u=>u.username===currentUser.username);if(m){currentUser={...currentUser,id:m.id};sessionStorage.setItem("blc_dicta_user",JSON.stringify(currentUser));}}
+  }
+  if(Array.isArray(ctr)&&ctr[0])globalInvCounter=ctr[0].current_value||0;
+}
+
+// ══ SPEECH ════════════════════════════════════════════════════════════════════
+function startRec(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){showState("manual");return;}
+  lastTranscript="";
+  recognition=new SR();
+  recognition.lang="fr-FR";recognition.continuous=true;recognition.interimResults=true;recognition.maxAlternatives=1;
+  recognition.onresult=e=>{
+    let final="",interim="";
+    for(let i=0;i<e.results.length;i++){
+      if(e.results[i].isFinal)final+=e.results[i][0].transcript+" ";
+      else interim+=e.results[i][0].transcript;
+    }
+    lastTranscript=(final||interim).trim();
+    const el=document.getElementById("rec-transcript");
+    if(el)el.textContent=lastTranscript||"En attente…";
+  };
+  recognition.onerror=e=>{if(!recognition||e.error==="aborted"||e.error==="no-speech")return;};
+  recognition.start();
+  showState("recording");
+}
+
+function cancelRec(){
+  if(recognition){try{recognition.stop();}catch(e){}recognition=null;}
+  showState("idle");
+}
+
+async function stopAndAnalyze(){
+  const r=recognition;recognition=null;
+  try{if(r)r.stop();}catch(e){}
+  const txt=lastTranscript.trim();
+  if(!txt){toast("⚠ Aucune parole détectée");showState("idle");return;}
+  await analyzeText(txt);
+}
+
+async function analyzeText(text){
+  if(!text.trim())return;
+  showState("analyzing");
+  // Corrections phonétiques
+  const corrections={"euro":"€","euros":"€","hors taxe":"HT","bocal":"local","a local":"local"};
+  let clean=text.toLowerCase();
+  Object.entries(corrections).forEach(([k,v])=>{clean=clean.replaceAll(k,v);});
+  clean=clean.charAt(0).toUpperCase()+clean.slice(1);
+
+  const knownProducts=stock.map(s=>s.name).join(",");
+  const knownClients=clients.map(c=>c.name).join(",");
+  const knownSuppliers=suppliers.map(s=>s.name).join(",");
+  const collaborateurs=allUsers.map(u=>u.display_name).join(",");
+  const today=new Date().toISOString().split("T")[0];
+  const tomorrow=new Date(Date.now()+86400000).toISOString().split("T")[0];
+
+  const prompt=`ERP BLC Import (grossiste vêtements). JSON uniquement, pas de markdown.
+Commande: "${clean}"
+Stock:${knownProducts||"-"} Clients:${knownClients||"-"} Fournisseurs:${knownSuppliers||"-"} Collaborateurs:${collaborateurs}
+Aujourd'hui:${today} Demain:${tomorrow}
+Actions: create_sale create_purchase update_purchase_status create_client create_todo create_rdv create_invoice
+Règles: Corrige phonétique. totalTTC=(qty*unitHT+shipping)*1.2. stockStatus défaut=local. assignedTo=prénom collaborateur.
+{"action":"create_sale|create_purchase|update_purchase_status|create_client|create_todo|create_rdv|create_invoice","client":{"name":"","address":"","siret":"","email":"","phone":""},"sale":{"product":"","qty":0,"unitHT":0,"shipping":0,"totalTTC":0,"lines":[{"product":"","qty":0,"unitHT":0,"totalHT":0}]},"purchase":{"supplier":"","product":"","qty":0,"unitHT":0,"totalHT":0,"stockStatus":"local"},"purchaseStatus":{"supplier":"","newStatus":"local"},"todo":{"title":"","description":"","assignedTo":"","priority":"normal","dueDate":""},"rdv":{"title":"","date":"","time":"","endTime":"","clientName":"","notes":""},"invoice":{"clientName":"","lines":[{"product":"","qty":0,"unitHT":0}],"shipping":0,"date":""},"summary":""}`;
+
+  try{
+    const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:400,messages:[{role:"user",content:prompt}]})});
+    const data=await res.json();
+    const raw=(data.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim();
+    pendingResult=JSON.parse(raw);
+    showConfirmMobile(pendingResult);
+  }catch(e){
+    toast("❌ Erreur d'analyse : "+e.message);
+    showState("idle");
+  }
+}
+
+function showConfirmMobile(result){
+  document.getElementById("confirm-summary").textContent=result.summary||"Action détectée";
+  let blocks="";
+  if(result.client?.name){
+    const ex=fuzzyMatch(result.client.name,clients,'name');
+    blocks+=`<div class="confirm-block"><div class="confirm-block-title">👤 Client ${ex?"(existant)":"(nouveau)"}</div><b>${result.client.name}</b>${result.client.address?"<br>"+result.client.address:""}${result.client.phone?"<br>📞 "+result.client.phone:""}</div>`;
+  }
+  if(result.sale?.totalTTC||result.sale?.unitHT){
+    const lines=result.sale.lines?.length?result.sale.lines:[{product:result.sale.product,qty:result.sale.qty,unitHT:result.sale.unitHT}];
+    blocks+=`<div class="confirm-block"><div class="confirm-block-title">💰 Vente</div>${lines.map(l=>`${l.qty}x <b>${l.product}</b> · ${fmtEur(l.unitHT)}/u`).join("<br>")}${result.sale.shipping>0?`<br>🚚 ${fmtEur(result.sale.shipping)}`""}<br><b style="color:var(--orange)">${fmtEur(result.sale.totalTTC)} TTC</b></div>`;
+  }
+  if(result.purchase?.product){
+    blocks+=`<div class="confirm-block"><div class="confirm-block-title">📦 Achat</div><b>${result.purchase.supplier}</b><br>${result.purchase.qty}x ${result.purchase.product} · ${fmtEur(result.purchase.unitHT)}/u<br>${result.purchase.stockStatus==="local"?"📦 Au local":result.purchase.stockStatus==="livraison"?"🚚 En livraison":"⏳ En préparation"}</div>`;
+  }
+  if(result.todo?.title){
+    const assignee=result.todo.assignedTo?allUsers.find(u=>normalize(u.display_name).includes(normalize(result.todo.assignedTo))):null;
+    blocks+=`<div class="confirm-block"><div class="confirm-block-title">✅ Tâche</div><b>${result.todo.title}</b>${assignee?"<br>→ "+assignee.display_name:" (globale)"}${result.todo.dueDate?"<br>📅 "+fmtDate(result.todo.dueDate):""}</div>`;
+  }
+  if(result.rdv?.title){
+    blocks+=`<div class="confirm-block"><div class="confirm-block-title">📅 RDV</div><b>${result.rdv.title}</b><br>${result.rdv.date?fmtDate(result.rdv.date):"—"}${result.rdv.time?" à "+result.rdv.time:""}${result.rdv.clientName?"<br>👤 "+result.rdv.clientName:""}</div>`;
+  }
+  if(result.invoice?.clientName){
+    const lines=result.invoice.lines||[];
+    const ttc=(lines.reduce((s,l)=>s+(l.qty||1)*(l.unitHT||0),0)+(result.invoice.shipping||0))*1.2;
+    blocks+=`<div class="confirm-block"><div class="confirm-block-title">🧾 Facture</div><b>${result.invoice.clientName}</b><br>${lines.map(l=>`${l.qty}x ${l.product}`).join(", ")}<br><b style="color:var(--orange)">${fmtEur(ttc)} TTC</b></div>`;
+  }
+  if(result.action==="create_client"&&result.client?.name){
+    blocks+=`<div class="confirm-block"><div class="confirm-block-title">👤 Nouveau client</div><b>${result.client.name}</b>${result.client.address?"<br>"+result.client.address:""}</div>`;
+  }
+  document.getElementById("confirm-blocks").innerHTML=blocks;
+  showState("confirm");
+}
+
+async function doApply(){
+  if(!pendingResult)return;
+  const result=pendingResult;
+  pendingResult=null;
+  showState("analyzing");
+  const msgs=[];
+  const today=new Date().toISOString().split("T")[0];
+
+  // Client
+  let clientObj=result.client?.name?fuzzyMatch(result.client.name,clients,'name'):null;
+  if(result.client?.name&&!clientObj){
+    const row={name:result.client.name,address:result.client.address||"",zip_city:"",siret:"",tva_intra:"",email:result.client.email||"",phone:result.client.phone||"",total_purchases:0};
+    const res=await dbPost("clients",row);
+    clientObj={id:res&&res[0]?res[0].id:"tmp-"+Date.now(),...row,totalPurchases:0};
+    clients=[...clients,clientObj];
+    msgs.push(`👤 Client "${clientObj.name}" créé`);
+  }
+
+  // Vente
+  if((result.action==="create_sale"||result.sale?.product)&&(result.sale?.totalTTC||result.sale?.unitHT)){
+    const lines=result.sale.lines?.length?result.sale.lines:[{product:result.sale.product,qty:result.sale.qty||1,unitHT:result.sale.unitHT||0,totalHT:(result.sale.qty||1)*(result.sale.unitHT||0)}];
+    const ship=result.sale.shipping||0;
+    const ttc=result.sale.totalTTC||parseFloat(((lines.reduce((s,l)=>s+l.totalHT,0)+ship)*1.2).toFixed(2));
+    const num=nextFAC();
+    const ns={id:"tmp-"+Date.now(),invoiceNum:num,globalSeq:globalInvCounter,client:clientObj?.name||result.client?.name||"Client",clientId:clientObj?.id||null,product:lines.map(l=>l.product).join(", "),_lines:lines,qty:lines.reduce((s,l)=>s+l.qty,0),unitHT:lines[0]?.unitHT||0,shipping:ship,totalTTC:ttc,date:today,source:"manual"};
+    sales=[ns,...sales];
+    lines.forEach(l=>{const m=fuzzyMatch(l.product,stock,'name');if(m){stock=stock.map(s=>String(s.id)===String(m.id)?{...s,qty:Math.max(0,s.qty-l.qty)}:s);dbPatch("stock",{id:m.id,qty:Math.max(0,m.qty-l.qty),name:m.name,reserved:m.reserved||0,unit_cost_ht:m.unitCostHT,shopify_linked:m.shopifyLinked||false,last_update:today});}});
+    const res=await dbPost("sales",{invoice_num:ns.invoiceNum,global_seq:ns.globalSeq,client_id:ns.clientId,client_name:ns.client,product:ns.product,lines:ns._lines,qty:ns.qty,unit_ht:ns.unitHT,shipping:ns.shipping,total_ttc:ns.totalTTC,date:today,source:"manual"});
+    if(res&&res[0])ns.id=res[0].id;
+    msgs.push(`✅ Vente ${num} — ${fmtEur(ttc)}`);
+  }
+
+  // Achat
+  if(result.action==="create_purchase"&&result.purchase?.product){
+    const p=result.purchase;
+    let suppObj=fuzzyMatch(p.supplier,suppliers,'name');
+    if(!suppObj&&p.supplier){suppObj={id:"tmp-"+Date.now(),name:p.supplier,contact:"",email:"",phone:""};suppliers=[...suppliers,suppObj];const res=await dbPost("suppliers",{name:suppObj.name});if(res&&res[0])suppObj.id=res[0].id;}
+    let stockItem=fuzzyMatch(p.product,stock,'name');
+    if(!stockItem){stockItem={id:"tmp-"+Date.now(),name:p.product,qty:0,reserved:0,unitCostHT:p.unitHT||0,shopifyLinked:false,lastUpdate:today};stock=[...stock,stockItem];const res=await dbPost("stock",{name:p.product,qty:0,reserved:0,unit_cost_ht:p.unitHT||0,shopify_linked:false,last_update:today});if(res&&res[0])stockItem.id=res[0].id;}
+    const lines=[{product:p.product,qty:p.qty,unitHT:p.unitHT||0,totalHT:p.totalHT||(p.qty*p.unitHT),linkedStockId:stockItem.id}];
+    const np={id:"tmp-"+Date.now(),supplier:suppObj?.name||p.supplier,supplierId:suppObj?.id||null,description:`${p.qty}x ${p.product}`,_lines:lines,qty:p.qty,unitHT:p.unitHT||0,amountHT:p.totalHT||(p.qty*p.unitHT),date:today,hasInvoice:false,stockStatus:p.stockStatus||"local",linkedStockId:stockItem.id};
+    purchases=[np,...purchases];
+    if(np.stockStatus==="local"){await dbRpc("update_stock_with_pmp",{p_stock_id:stockItem.id,p_new_qty:p.qty,p_new_unit_cost:p.unitHT||0,p_date:today});stock=stock.map(s=>String(s.id)===String(stockItem.id)?{...s,qty:s.qty+p.qty,unitCostHT:p.unitHT||0}:s);}
+    const res=await dbPost("purchases",{supplier_id:np.supplierId,supplier_name:np.supplier,description:np.description,lines:np._lines,qty:np.qty,unit_ht:np.unitHT,amount_ht:np.amountHT,date:today,has_invoice:false,stock_status:np.stockStatus,linked_stock_id:np.linkedStockId});
+    if(res&&res[0])np.id=res[0].id;
+    msgs.push(`✅ Achat ${p.qty}x ${p.product} — ${fmtEur(np.amountHT)} HT`);
+  }
+
+  // Statut achat
+  if(result.purchaseStatus?.supplier&&result.purchaseStatus?.newStatus){
+    const m=purchases.find(p=>fuzzyMatch(result.purchaseStatus.supplier,[{name:p.supplier}],'name'));
+    if(m){
+      const prev=purchases.find(x=>String(x.id)===String(m.id));
+      if(prev){purchases=purchases.map(x=>String(x.id)===String(m.id)?{...x,stockStatus:result.purchaseStatus.newStatus}:x);dbPatch("purchases",{id:m.id,stock_status:result.purchaseStatus.newStatus});}
+      msgs.push("🔄 Statut mis à jour");
+    }
+  }
+
+  // Client seul
+  if(result.action==="create_client"&&result.client?.name&&!clientObj){
+    const row={name:result.client.name,address:result.client.address||"",zip_city:"",siret:result.client.siret||"",tva_intra:"",email:result.client.email||"",phone:result.client.phone||"",total_purchases:0};
+    const res=await dbPost("clients",row);
+    clients=[...clients,{id:res&&res[0]?res[0].id:"tmp-"+Date.now(),...row,totalPurchases:0}];
+    msgs.push(`👤 Client "${result.client.name}" créé`);
+  }
+
+  // Todo
+  if(result.action==="create_todo"&&result.todo?.title){
+    const td=result.todo;
+    const assignee=td.assignedTo?allUsers.find(u=>normalize(u.display_name).includes(normalize(td.assignedTo))):null;
+    const newTodo={id:"tmp-"+Date.now(),title:td.title,description:td.description||"",assigned_to:assignee?.id||null,created_by:currentUser?.id||null,priority:td.priority||"normal",status:"todo",due_date:td.dueDate||null,is_global:!assignee,created_at:new Date().toISOString()};
+    const isV=v=>v&&/^[0-9a-f-]{36}$/i.test(String(v));
+    const res=await dbPost("todos",{title:newTodo.title,description:newTodo.description||null,assigned_to:isV(newTodo.assigned_to)?newTodo.assigned_to:null,created_by:isV(newTodo.created_by)?newTodo.created_by:null,due_date:newTodo.due_date||null,priority:newTodo.priority,status:"todo",is_global:newTodo.is_global});
+    if(res&&res[0])newTodo.id=res[0].id;
+    msgs.push(`✅ Tâche "${td.title}"${assignee?" → "+assignee.display_name:" (globale)"}`);
+  }
+
+  // RDV
+  if(result.action==="create_rdv"&&result.rdv?.title){
+    const r=result.rdv;
+    const rdvClient=r.clientName?fuzzyMatch(r.clientName,clients,'name'):null;
+    const newRdv={id:"tmp-"+Date.now(),title:r.title,date:r.date||today,time:r.time||null,endTime:r.endTime||null,clientId:rdvClient?.id||null,clientName:r.clientName||"",notes:r.notes||"",source:"manual"};
+    const res=await dbPost("rdv",{title:newRdv.title,date:newRdv.date,time:newRdv.time||null,end_time:newRdv.endTime||null,client_id:newRdv.clientId||null,client_name:newRdv.clientName||null,notes:newRdv.notes||null,source:"manual",created_by:currentUser?.id||null});
+    if(res&&res[0])newRdv.id=res[0].id;
+    msgs.push(`📅 RDV "${r.title}" le ${r.date?fmtDate(r.date):"—"}`);
+  }
+
+  // Facture
+  if(result.action==="create_invoice"&&result.invoice?.clientName){
+    const inv=result.invoice;
+    let invClient=fuzzyMatch(inv.clientName,clients,'name');
+    if(!invClient){const res=await dbPost("clients",{name:inv.clientName,address:"",zip_city:"",siret:"",tva_intra:"",email:"",phone:"",total_purchases:0});invClient={id:res&&res[0]?res[0].id:"tmp-"+Date.now(),name:inv.clientName,totalPurchases:0};clients=[...clients,invClient];}
+    const lines=(inv.lines||[]).map(l=>({product:l.product,qty:l.qty||1,unitHT:l.unitHT||0,totalHT:(l.qty||1)*(l.unitHT||0)}));
+    if(lines.length){
+      const ship=inv.shipping||0;const ttc=parseFloat(((lines.reduce((s,l)=>s+l.totalHT,0)+ship)*1.2).toFixed(2));
+      const num=nextFAC();
+      const ns={id:"tmp-"+Date.now(),invoiceNum:num,globalSeq:globalInvCounter,client:invClient.name,clientId:invClient.id,product:lines.map(l=>l.product).join(", "),_lines:lines,qty:lines[0]?.qty||1,unitHT:lines[0]?.unitHT||0,shipping:ship,totalTTC:ttc,date:inv.date||today,source:"manual"};
+      const res=await dbPost("sales",{invoice_num:ns.invoiceNum,global_seq:ns.globalSeq,client_id:ns.clientId,client_name:ns.client,product:ns.product,lines:ns._lines,qty:ns.qty,unit_ht:ns.unitHT,shipping:ns.shipping,total_ttc:ns.totalTTC,date:ns.date,source:"manual"});
+      if(res&&res[0])ns.id=res[0].id;
+      msgs.push(`🧾 Facture ${num} — ${fmtEur(ttc)}`);
+    }
+  }
+
+  document.getElementById("done-label").textContent=msgs.length?"Action effectuée !":"Rien à faire.";
+  document.getElementById("done-msgs").innerHTML=msgs.join("<br>")||"—";
+  showState("done");
+}
+
+// ══ INIT ══════════════════════════════════════════════════════════════════════
+(function(){
+  // Rediriger PC vers l'ERP principal
+  const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if(!isMobile&&!location.search.includes("force")){
+    location.href="/";
+    return;
+  }
+  // Restaurer session
+  const saved=sessionStorage.getItem("blc_dicta_user");
+  if(saved){
+    try{
+      currentUser=JSON.parse(saved);
+      showUserBar();
+      loadData().then(()=>showState("idle"));
+    }catch(e){sessionStorage.removeItem("blc_dicta_user");showState("login");}
+  } else {
+    showState("login");
+  }
+})();
+</script>
+</body>
+</html>
