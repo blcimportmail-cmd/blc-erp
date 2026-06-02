@@ -231,9 +231,9 @@ hr.div{border:none;border-top:1px solid var(--border);margin:14px 0}
       </div>
       <div style="display:flex;flex-direction:column;gap:14px">
         <div class="card" style="flex:1">
-          <div class="card-title">Clients uniques</div>
+          <div class="card-title">Cartons expédiés</div>
           <div style="font-size:32px;font-weight:900;color:var(--orange)" id="d-clients">0</div>
-          <div style="font-size:11px;color:var(--light);margin-top:4px">base de données</div>
+          <div style="font-size:11px;color:var(--light);margin-top:4px">@ 25€ / carton</div>
         </div>
         <div class="card" style="flex:1;background:var(--navy);border:none">
           <div class="card-title" style="color:rgba(255,255,255,0.35)">Valeur stock local HT</div>
@@ -731,7 +731,7 @@ function renderDashboard(){
   document.getElementById("kpi-row").innerHTML=`
     <div class="kpi accent"><div class="kpi-orb"></div><div class="kpi-icon">💰</div><div class="kpi-label">CA période</div><div class="kpi-val">${fmtEur(totalCA)}</div><div class="kpi-sub">Shopify + hors site</div></div>
     <div class="kpi plain"><div class="kpi-icon">📈</div><div class="kpi-label">Ventes période</div><div class="kpi-val">${allSales.length}</div><div class="kpi-sub">${salesR.length} manuelles</div></div>
-    <div class="kpi plain"><div class="kpi-icon">👥</div><div class="kpi-label">Clients uniques</div><div class="kpi-val">${clients.length}</div><div class="kpi-sub">base de données</div></div>
+    <div class="kpi plain"><div class="kpi-icon">📦</div><div class="kpi-label">Cartons expédiés</div><div class="kpi-val">${Math.round(allSales.filter(s=>s.source==="shopify").reduce((s,v)=>s+(v.shipping||0),0)/25)}</div><div class="kpi-sub">@ 25€ / carton</div></div>
     <div class="kpi plain"><div class="kpi-icon">📦</div><div class="kpi-label">Stock local HT</div><div class="kpi-val">${fmtEur(stockVal)}</div><div class="kpi-sub">valeur d'achat</div></div>
     <div class="kpi plain"><div class="kpi-icon">${beneficeProduit===0&&totalCA>0?"⚠️":beneficeNet>=0?"✅":"🔴"}</div><div class="kpi-label">Bénéfice / Perte net HT</div><div class="kpi-val" style="color:${beneficeProduit===0&&totalCA>0?"var(--light)":beneficeNet>=0?"var(--green)":"var(--red)"}">${beneficeProduit===0&&totalCA>0?"Coûts manquants":fmtEur(beneficeNet)}</div><div class="kpi-sub">${beneficeProduit===0&&totalCA>0?"Renseigner les coûts dans Stock":"marge − charges période"}</div></div>`;
 
@@ -790,7 +790,7 @@ function renderDashboard(){
   document.getElementById("rep-mn-bar").style.width=`${(caManuel/caTotal)*100}%`;
   document.getElementById("rep-marge").textContent=`${totalCA>0?((beneficeNet/totalCA)*100).toFixed(1):0}%`;
   document.getElementById("rep-charges").textContent=fmtEur(chargesPeriod);
-  document.getElementById("d-clients").textContent=clients.length;
+  document.getElementById("d-clients").textContent=Math.round(allSales.filter(s=>s.source==="shopify").reduce((s,v)=>s+(v.shipping||0),0)/25);
   document.getElementById("d-stock").textContent=fmtEur(stockVal);
   const sorted=[...clients].sort((a,b)=>b.totalPurchases-a.totalPurchases).slice(0,5);
   document.getElementById("top-clients").innerHTML=sorted.length===0?`<div class="empty-state">Aucun client encore</div>`:sorted.map(c=>`
