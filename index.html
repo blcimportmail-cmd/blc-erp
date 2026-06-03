@@ -2409,6 +2409,7 @@ async function loadShopifyStock() {
 
         // Chercher par variantId d'abord, puis par nom (matching flou)
         let existing = stock.find(s => s.shopifyVariantId === v.id);
+        if(!existing) existing = stock.find(s => normalize(s.name) === normalize(name));
         if(!existing) existing = fuzzyMatch(name, stock, "name");
 
         if(existing) {
