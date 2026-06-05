@@ -870,7 +870,7 @@ function renderDashboard(){
     }
   });
   console.log(`[bénéfice] OK:${_dbgOk} sans coût:${_dbgFail.length}`,_dbgFail.slice(0,5));
-  console.log(`[totaux] CA TTC:${totalCA.toFixed(2)} | beneficeProduit:${beneficeProduit.toFixed(2)} | nb ventes:${allSales.length} (${salesR.length} manuel + ${paid.length} shopify)`);
+  console.log(`[totaux] CA TTC:${totalCA.toFixed(2)} | beneficeProduit:${beneficeProduit.toFixed(2)} | nb ventes:${allSales.length} (${salesR.length} manuel + ${paid.length} shopify) | dashFrom:${dashFrom} dashTo:${dashTo}`);
   let _sumMarges=0;
   allSales.forEach(s=>{
     const sHT=(s.totalTTC-(s.shipping||0)*1.2)/1.2;
