@@ -801,6 +801,17 @@ function renderDashboard(){
       beneficeProduit += revenueHT - totalCostHT;
       _dbgOk++;
       console.log(`[vente] ${s.source} | CA HT:${revenueHT.toFixed(2)} | coût:${totalCostHT.toFixed(2)} | marge:${(revenueHT-totalCostHT).toFixed(2)} | prod:${(s.product||'').slice(0,40)}`);
+      if(totalCostHT > revenueHT){
+        const lines3=s._lines||s.lineItems||[];
+        lines3.forEach(l=>{
+          const p2=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
+          console.warn(`  ↳ ligne: "${l.product||l.name}" | qty:${l.qty} | linkedId:${l.linkedStockId} | stockName:"${p2?.name}" | PMP:${p2?.unitCostHT} | ligneCost:${(l.qty||1)*(p2?.unitCostHT||0)}`);
+        });
+        if(s.linkedStockId){
+          const p2=stock.find(x=>String(x.id)===String(s.linkedStockId));
+          console.warn(`  ↳ linkedStockId direct: "${p2?.name}" | qty:${s.qty} | PMP:${p2?.unitCostHT}`);
+        }
+      }
     }
     // If no cost: don't include (avoids showing false inflated benefice)
     else {
