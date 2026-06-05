@@ -774,22 +774,70 @@ function renderDashboard(){
     const qty = s.qty || 1;
     const hasLines = (s._lines&&s._lines.length>0)||(s.lineItems&&s.lineItems.length>0);
     if(s.linkedStockId && !hasLines){
-      // Vente simple (1 produit) : utiliser le linkedStockId direct
-      const p=stock.find(x=>String(x.id)===String(s.linkedStockId));
-      if(p&&p.unitCostHT>0) totalCostHT = qty * p.unitCostHT;
+      // Vente simple (1 produit)
+      // Si précommande sur la vente elle-même, utiliser le prix achat réel
+      let coutUnit=0;
+      const isPreorderSale=s.preorder&&s.preorderType;
+      if(isPreorderSale){
+        const relPurchases=purchases.filter(p=>
+          p.stockStatus===s.preorderType &&
+          (p._lines||[]).some(pl=>String(pl.linkedStockId)===String(s.linkedStockId))
+        );
+        if(relPurchases.length){
+          let tQty=0,tVal=0;
+          relPurchases.forEach(p=>{
+            (p._lines||[]).forEach(pl=>{
+              if(String(pl.linkedStockId)===String(s.linkedStockId)){tQty+=pl.qty||0;tVal+=(pl.qty||0)*(pl.unitHT||p.unitHT||0);}
+            });
+          });
+          if(tQty>0) coutUnit=tVal/tQty;
+        }
+      }
+      if(!coutUnit){
+        const p=stock.find(x=>String(x.id)===String(s.linkedStockId));
+        coutUnit=p?.unitCostHT||0;
+      }
+      if(coutUnit>0) totalCostHT = qty * coutUnit;
     } else {
       // Vente multi-lignes OU sans linkedStockId : utiliser les lignes détaillées
       const lines = s._lines||s.lineItems||[];
       if(lines.length){
         lines.forEach(l=>{
-          // Priorité : linkedStockId direct (injecté sur les lineItems Shopify)
-          let p = l.linkedStockId ? stock.find(x=>String(x.id)===String(l.linkedStockId)) : null;
-          if(!p){
-            const pname = l.product||l.name||"";
-            p=stock.find(x=>normalize(x.name)===normalize(pname));
-            if(!p)p=fuzzyMatch(pname,stock,"name");
+          const lqty=l.qty||1;
+          let coutUnit=0;
+
+          if(l.preorder&&l.preorderType&&l.linkedStockId){
+            // Précommande : prix réel de l'achat, pas le PMP stock
+            const relPurchases=purchases.filter(p=>
+              p.stockStatus===l.preorderType &&
+              (p._lines||[]).some(pl=>String(pl.linkedStockId)===String(l.linkedStockId))
+            );
+            if(relPurchases.length){
+              let tQty=0,tVal=0;
+              relPurchases.forEach(p=>{
+                (p._lines||[]).forEach(pl=>{
+                  if(String(pl.linkedStockId)===String(l.linkedStockId)){
+                    tQty+=pl.qty||0;
+                    tVal+=(pl.qty||0)*(pl.unitHT||p.unitHT||0);
+                  }
+                });
+              });
+              if(tQty>0) coutUnit=tVal/tQty;
+            }
+            if(!coutUnit){
+              const sw=getStockWithStatus().find(x=>String(x.id)===String(l.linkedStockId));
+              if(sw) coutUnit=l.preorderType==="livraison"?(sw.costLiv||0):(sw.costPrep||0);
+            }
           }
-          if(p&&p.unitCostHT>0) totalCostHT += (l.qty||1)*p.unitCostHT;
+
+          // Fallback ou vente locale : PMP stock
+          if(!coutUnit){
+            let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
+            if(!p){const pname=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pname));if(!p)p=fuzzyMatch(pname,stock,"name");}
+            coutUnit=p?.unitCostHT||0;
+          }
+
+          if(coutUnit>0) totalCostHT += lqty*coutUnit;
         });
       } else {
         let p=stock.find(x=>normalize(x.name)===normalize(s.product||""));
@@ -822,6 +870,20 @@ function renderDashboard(){
     }
   });
   console.log(`[bénéfice] OK:${_dbgOk} sans coût:${_dbgFail.length}`,_dbgFail.slice(0,5));
+  console.log(`[totaux] CA TTC:${totalCA.toFixed(2)} | beneficeProduit:${beneficeProduit.toFixed(2)} | nb ventes:${allSales.length} (${salesR.length} manuel + ${paid.length} shopify)`);
+  let _sumMarges=0;
+  allSales.forEach(s=>{
+    const sHT=(s.totalTTC-(s.shipping||0)*1.2)/1.2;
+    const hasL=(s._lines&&s._lines.length>0)||(s.lineItems&&s.lineItems.length>0);
+    const lines4=s._lines||s.lineItems||[];
+    let cost4=0;
+    if(s.linkedStockId&&!hasL){const p=stock.find(x=>String(x.id)===String(s.linkedStockId));cost4=(p?.unitCostHT||0)*(s.qty||1);}
+    else lines4.forEach(l=>{const p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;if(p)cost4+=(l.qty||1)*p.unitCostHT;});
+    const m=sHT-cost4;
+    _sumMarges+=m;
+    console.log(`  [${s.source}] "${(s.client||'').slice(0,15)}" CA HT:${sHT.toFixed(0)} coût:${cost4.toFixed(0)} marge:${m.toFixed(0)} TTC:${s.totalTTC}`);
+  });
+  console.log(`[sum marges directes] ${_sumMarges.toFixed(2)} vs beneficeProduit:${beneficeProduit.toFixed(2)}`);
 
   // Charges proratées sur la période
   const chargesPeriod=chargesForRange(dashFrom,dashTo);
