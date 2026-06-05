@@ -670,9 +670,13 @@ function enrichLineItems(){
   const variantIndex = {};
   stock.forEach(s=>{ if(s.shopifyVariantId) variantIndex[String(s.shopifyVariantId)]=s; });
 
-  // Index 2 : nom normalisé exact → stockItem
+  // Index 2 : nom normalisé exact → stockItem + shopifyName explicite
   const nameIndex = {};
-  stock.forEach(s=>{ if(s.unitCostHT>0) nameIndex[normalize(s.name)]=s; });
+  const shopifyNameIndex = {};
+  stock.forEach(s=>{
+    if(s.unitCostHT>0) nameIndex[normalize(s.name)]=s;
+    if(s.shopifyName) shopifyNameIndex[normalize(s.shopifyName)]=s;
+  });
 
   // Index 3 : depuis les items Shopify liés, construire parsedName → stockItem
   // ex: stock "Chemise tommy" a shopifyVariantId → son titre Shopify parsé est "chemises tommy hilfiger"
@@ -704,6 +708,8 @@ function enrichLineItems(){
       if(l.shopifyVariantId && variantIndex[String(l.shopifyVariantId)]){
         l.linkedStockId=variantIndex[String(l.shopifyVariantId)].id; enriched++; return;
       }
+      // Stratégie 1b : nom Shopify explicitement renseigné dans la fiche stock
+      if(shopifyNameIndex[nname]){ l.linkedStockId=shopifyNameIndex[nname].id; enriched++; return; }
       // Stratégie 2 : nom normalisé exact dans le stock ERP
       if(nameIndex[nname]){ l.linkedStockId=nameIndex[nname].id; enriched++; return; }
 
@@ -2146,15 +2152,16 @@ function submitStock(id){
   const qty=parseInt(document.getElementById("sk-qty").value)||0;
   const cost=parseFloat(document.getElementById("sk-cost").value)||0;
   const linked=document.getElementById("sk-linked").checked;
+  const shopifyName=(document.getElementById("sk-shopify-name")?.value||"").trim();
   const today=new Date().toISOString().split("T")[0];
   if(id&&id!=='null'){
-    stock=stock.map(s=>String(s.id)===String(id)?{...s,name,qty,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today}:s);
-    dbPatch("stock",{id,name,qty,reserved:0,unit_cost_ht:cost,shopify_linked:linked,last_update:today});
+    stock=stock.map(s=>String(s.id)===String(id)?{...s,name,qty,unitCostHT:cost,shopifyLinked:linked,shopifyName,lastUpdate:today}:s);
+    dbPatch("stock",{id,name,qty,reserved:0,unit_cost_ht:cost,shopify_linked:linked,shopify_name:shopifyName,last_update:today});
   } else {
-    const row={name,qty,reserved:0,unit_cost_ht:cost,shopify_linked:linked,last_update:today};
+    const row={name,qty,reserved:0,unit_cost_ht:cost,shopify_linked:linked,shopify_name:shopifyName,last_update:today};
     dbPost("stock",row).then(r=>{
       const newId=r&&r[0]?r[0].id:("tmp-"+Date.now());
-      stock=[...stock,{id:newId,name,qty,reserved:0,unitCostHT:cost,shopifyLinked:linked,lastUpdate:today}];
+      stock=[...stock,{id:newId,name,qty,reserved:0,unitCostHT:cost,shopifyLinked:linked,shopifyName,lastUpdate:today}];
       renderStock();
     });
   }
@@ -2494,11 +2501,25 @@ async function loadShopifyOrders() {
       lineItems: o.line_items.map(l => {
         const { multiplier, name } = parseShopifyTitle(l.name);
         const realQty = l.quantity * multiplier;
-        // Résoudre le linkedStockId via variantId d'abord, puis nom
+        // Résoudre le linkedStockId : variantId > shopifyName > nom exact > mots ERP inclus dans nom Shopify
         const variantId = l.variant_id;
+        const nname = normalize(name);
         let stockItem = variantId ? stock.find(s => s.shopifyVariantId === variantId) : null;
-        if(!stockItem) stockItem = stock.find(s => normalize(s.name) === normalize(name));
-        if(!stockItem) stockItem = fuzzyMatch(name, stock, "name");
+        if(!stockItem) stockItem = stock.find(s => s.shopifyName && normalize(s.shopifyName)===nname);
+        if(!stockItem) stockItem = stock.find(s => normalize(s.name)===nname);
+        if(!stockItem){
+          // Mots ERP (courts, précis) tous présents dans le nom Shopify (long)
+          let best=null,bestScore=0;
+          stock.forEach(st=>{
+            if(!st.unitCostHT||st.unitCostHT<=0)return;
+            const erpWords=normalize(st.name).split(" ").filter(w=>w.length>2);
+            if(!erpWords.length)return;
+            const matched=erpWords.filter(w=>nname.includes(w));
+            const score=matched.length/erpWords.length;
+            if(score>bestScore&&score>=0.6){bestScore=score;best=st;}
+          });
+          stockItem=best;
+        }
         return {
           product: name,
           qty: realQty,
@@ -2526,8 +2547,8 @@ async function loadShopifyOrders() {
       shopifyOrderNumber: o.order_number,
     }));
     shopifyConnected = true;
-    // Re-render dashboard with fresh Shopify data
-    // Re-render dashboard and ventes with fresh Shopify data
+    // Enrichir les lineItems avant de calculer la marge
+    enrichLineItems();
     renderDashboard();
     if(document.getElementById("ventes-body")) renderVentes();
 
@@ -3462,7 +3483,7 @@ async function dbDelete(table, id) {
 
 // Convert Supabase row → local format
 function rowToClient(r){return {id:r.id,name:r.name,address:r.address||"",zipCity:r.zip_city||"",siret:r.siret||"",tvaIntra:r.tva_intra||"",email:r.email||"",phone:r.phone||"",totalPurchases:parseFloat(r.total_purchases||0)};}
-function rowToStock(r){return {id:r.id,name:r.name,qty:r.qty||0,reserved:r.reserved||0,unitCostHT:parseFloat(r.unit_cost_ht||0),shopifyLinked:r.shopify_linked||false,shopifyProductId:r.shopify_product_id,shopifyVariantId:r.shopify_variant_id,shopifyMultiplier:r.shopify_multiplier||1,lastUpdate:r.last_update};}
+function rowToStock(r){return {id:r.id,name:r.name,qty:r.qty||0,reserved:r.reserved||0,unitCostHT:parseFloat(r.unit_cost_ht||0),shopifyLinked:r.shopify_linked||false,shopifyProductId:r.shopify_product_id,shopifyVariantId:r.shopify_variant_id,shopifyMultiplier:r.shopify_multiplier||1,shopifyName:r.shopify_name||'',lastUpdate:r.last_update};}
 function rowToSale(r){return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:r.lines||[],lineItems:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id,shopifyOrderId:r.shopify_order_id};}
 function rowToPurchase(r){return {id:r.id,supplier:r.supplier_name,supplierId:r.supplier_id,description:r.description,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),amountHT:parseFloat(r.amount_ht||0),date:r.date,hasInvoice:r.has_invoice,invoiceFile:r.invoice_file,stockStatus:r.stock_status,linkedStockId:r.linked_stock_id};}
 function rowToCharge(r){return {id:r.id,name:r.name,type:r.type,category:r.category,amountHT:parseFloat(r.amount_ht||0),period:r.period,note:r.note,active:r.active!==false};}
