@@ -1387,15 +1387,35 @@ function deleteInvoice(id){
   if(!confirm("Supprimer cette facture ? Les numéros seront recalculés."))return;
   const s=sales.find(x=>String(x.id)===String(id));
   if(s){
-    let restoredItem=null;
-    if(s.linkedStockId){
-      stock=stock.map(st=>{if(String(st.id)===String(s.linkedStockId)){restoredItem={...st,qty:st.qty+(s.qty||0)};return restoredItem;}return st;});
-    } else {
-      const m=stock.find(st=>s.product.toLowerCase().includes(st.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));
-      if(m)stock=stock.map(st=>String(st.id)===String(m.id)?(restoredItem={...st,qty:st.qty+(s.qty||0)}):st);
-    }
-    if(restoredItem?.shopifyVariantId) syncStockToShopify(restoredItem);
-    if(restoredItem) dbPatch("stock",{id:restoredItem.id,qty:restoredItem.qty,name:restoredItem.name,reserved:restoredItem.reserved||0,unit_cost_ht:restoredItem.unitCostHT,shopify_linked:restoredItem.shopifyLinked||false,last_update:new Date().toISOString().split("T")[0]});
+    const lines=s._lines&&s._lines.length?s._lines:[{linkedStockId:s.linkedStockId,qty:s.qty,preorder:false}];
+    lines.forEach(l=>{
+      if(!l.linkedStockId)return;
+      if(l.preorder&&l.preorderType){
+        // Précommande : remettre la qté dans les lignes d'achat (livraison/préparation)
+        let qtyToRestore=l.qty;
+        purchases=purchases.map(p=>{
+          if(p.stockStatus!==l.preorderType||qtyToRestore<=0)return p;
+          const newLines=(p._lines||[]).map(pl=>{
+            if(String(pl.linkedStockId)!==String(l.linkedStockId)||qtyToRestore<=0)return pl;
+            const restore=qtyToRestore;
+            qtyToRestore=0;
+            return{...pl,qty:pl.qty+restore};
+          });
+          const newQty=newLines.reduce((s,pl)=>s+pl.qty,0);
+          dbPatch("purchases",{id:p.id,qty:newQty,lines:newLines,amount_ht:parseFloat((newQty*(p.unitHT||0)).toFixed(2))});
+          return{...p,qty:newQty,_lines:newLines,amountHT:parseFloat((newQty*(p.unitHT||0)).toFixed(2))};
+        });
+      } else {
+        // Stock local : restaurer dans stock physique
+        let restoredItem=null;
+        stock=stock.map(st=>{
+          if(String(st.id)===String(l.linkedStockId)){restoredItem={...st,qty:st.qty+l.qty};return restoredItem;}
+          return st;
+        });
+        if(restoredItem?.shopifyVariantId) syncStockToShopify(restoredItem);
+        if(restoredItem) dbPatch("stock",{id:restoredItem.id,qty:restoredItem.qty,name:restoredItem.name,reserved:restoredItem.reserved||0,unit_cost_ht:restoredItem.unitCostHT,shopify_linked:restoredItem.shopifyLinked||false,last_update:new Date().toISOString().split("T")[0]});
+      }
+    });
     if(s.clientId)clients=clients.map(c=>String(c.id)===String(s.clientId)?{...c,totalPurchases:Math.max(0,(c.totalPurchases||0)-s.totalTTC)}:c);
   }
   sales=sales.filter(x=>String(x.id)!==String(id));
