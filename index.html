@@ -695,25 +695,29 @@ function renderDashboard(){
   let beneficeProduit=0;
   allSales.forEach(s=>{
     // Revenue HT pour cette vente (sans frais de port)
-    const revenueHT = (s.totalTTC - (s.shipping||0)*1.2) / 1.2;
+    // totalTTC inclut shipping TTC, on retire le shipping HT directement
+    const revenueHT = s.totalTTC/1.2 - (s.shipping||0);
     // Find cost — only deduct if we actually have a cost set
     let totalCostHT = 0;
     const qty = s.qty || 1;
     if(s.linkedStockId){
       const p=stock.find(x=>String(x.id)===String(s.linkedStockId));
       if(p&&p.unitCostHT>0) totalCostHT = qty * p.unitCostHT;
-    } else if(s._lines&&s._lines.length){
-      s._lines.forEach(l=>{
-        // Essayer exact puis fuzzy
-        let p=stock.find(x=>normalize(x.name)===normalize(l.product||""));
-        if(!p)p=fuzzyMatch(l.product||"",stock,"name");
-        if(p&&p.unitCostHT>0) totalCostHT += (l.qty||1)*p.unitCostHT;
-      });
     } else {
-      // Essayer exact puis fuzzy
-      let p=stock.find(x=>normalize(x.name)===normalize(s.product||""));
-      if(!p)p=fuzzyMatch(s.product||"",stock,"name");
-      if(p&&p.unitCostHT>0) totalCostHT = qty * p.unitCostHT;
+      // Utiliser lineItems (Shopify) ou _lines (manuel) ou product (fallback)
+      const lines = s._lines||s.lineItems||[];
+      if(lines.length){
+        lines.forEach(l=>{
+          const pname = l.product||l.name||"";
+          let p=stock.find(x=>normalize(x.name)===normalize(pname));
+          if(!p)p=fuzzyMatch(pname,stock,"name");
+          if(p&&p.unitCostHT>0) totalCostHT += (l.qty||1)*p.unitCostHT;
+        });
+      } else {
+        let p=stock.find(x=>normalize(x.name)===normalize(s.product||""));
+        if(!p)p=fuzzyMatch(s.product||"",stock,"name");
+        if(p&&p.unitCostHT>0) totalCostHT = qty * p.unitCostHT;
+      }
     }
     // If no cost known: bénéfice = 0 for this sale (unknown margin)
     // Only add to benefice if we have cost data
