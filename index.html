@@ -772,11 +772,13 @@ function renderDashboard(){
     // Find cost — only deduct if we actually have a cost set
     let totalCostHT = 0;
     const qty = s.qty || 1;
-    if(s.linkedStockId){
+    const hasLines = (s._lines&&s._lines.length>0)||(s.lineItems&&s.lineItems.length>0);
+    if(s.linkedStockId && !hasLines){
+      // Vente simple (1 produit) : utiliser le linkedStockId direct
       const p=stock.find(x=>String(x.id)===String(s.linkedStockId));
       if(p&&p.unitCostHT>0) totalCostHT = qty * p.unitCostHT;
     } else {
-      // Utiliser lineItems (Shopify) ou _lines (manuel) ou product (fallback)
+      // Vente multi-lignes OU sans linkedStockId : utiliser les lignes détaillées
       const lines = s._lines||s.lineItems||[];
       if(lines.length){
         lines.forEach(l=>{
