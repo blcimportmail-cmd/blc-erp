@@ -800,6 +800,7 @@ function renderDashboard(){
     if(totalCostHT > 0) {
       beneficeProduit += revenueHT - totalCostHT;
       _dbgOk++;
+      console.log(`[vente] ${s.source} | CA HT:${revenueHT.toFixed(2)} | coût:${totalCostHT.toFixed(2)} | marge:${(revenueHT-totalCostHT).toFixed(2)} | prod:${(s.product||'').slice(0,40)}`);
     }
     // If no cost: don't include (avoids showing false inflated benefice)
     else {
