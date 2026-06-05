@@ -694,8 +694,9 @@ function renderDashboard(){
   // = CA HT - coût d'achat HT (si connu)
   let beneficeProduit=0;
   allSales.forEach(s=>{
-    // Revenue HT = totalTTC / 1.2 (tout compris, shipping inclus)
-    const revenueHT = s.totalTTC / 1.2;
+    // Revenue HT produit = (totalTTC - shipping TTC) / 1.2
+    const shippingTTC = (s.shipping||0) * 1.2;
+    const revenueHT = (s.totalTTC - shippingTTC) / 1.2;
     // Find cost — only deduct if we actually have a cost set
     let totalCostHT = 0;
     const qty = s.qty || 1;
