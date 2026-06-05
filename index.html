@@ -796,7 +796,8 @@ function renderDashboard(){
   document.getElementById("rep-mn").textContent=fmtEur(caManuel);
   document.getElementById("rep-sh-bar").style.width=`${(caShopify/caTotal)*100}%`;
   document.getElementById("rep-mn-bar").style.width=`${(caManuel/caTotal)*100}%`;
-  document.getElementById("rep-marge").textContent=`${totalCA>0?((beneficeNet/totalCA)*100).toFixed(1):0}%`;
+  const caHTProduit=allSales.reduce((s,v)=>s+(v.totalTTC-(v.shipping||0)*1.2)/1.2,0);
+  document.getElementById("rep-marge").textContent=`${caHTProduit>0?((beneficeNet/caHTProduit)*100).toFixed(1):0}%`;
   document.getElementById("rep-charges").textContent=fmtEur(chargesPeriod);
   const uniqueClients=new Set(allSales.map(s=>s.clientId||s.client).filter(Boolean));document.getElementById("d-clients").textContent=uniqueClients.size;
   document.getElementById("d-stock").textContent=fmtEur(stockVal);
