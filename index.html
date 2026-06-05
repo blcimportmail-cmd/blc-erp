@@ -952,12 +952,13 @@ function addStockFromPurchase(p){
       // Précommande : réduire la qté dans les lignes d'achat (livraison/préparation)
       let qtyToDeduct=g.totalQty;
       purchases=purchases.map(p=>{
-        if(p.stockStatus!==g.preorderType)return p;
-        let localQty=g.totalQty;
+        if(p.stockStatus!==g.preorderType||qtyToDeduct<=0)return p;
+        let localQty=qtyToDeduct;
         const newLines=(p._lines||[]).map(l=>{
           if(String(l.linkedStockId)!==String(g.linkedStockId)||localQty<=0)return l;
           const deduct=Math.min(l.qty,localQty);
           localQty-=deduct;
+          qtyToDeduct-=deduct;
           return{...l,qty:l.qty-deduct};
         });
         const newQty=newLines.reduce((s,l)=>s+l.qty,0);
@@ -981,17 +982,9 @@ function addStockFromPurchase(p){
       if(stockItem?.shopifyVariantId) deductShopifyStock(stockItem,g.totalQty);
     }
   });
-  // Recharger stock ET achats depuis Supabase après la vente
-  setTimeout(async()=>{
-    const [stk,purch]=await Promise.all([
-      dbGet("stock","order=name"),
-      dbGet("purchases","order=created_at.desc")
-    ]);
-    if(Array.isArray(stk)) stock=stk.map(rowToStock);
-    if(Array.isArray(purch)) purchases=purch.map(rowToPurchase);
-    renderStock();
-    renderAchats();
-  }, 800);
+  // Re-render après la vente (pas de reload Supabase qui écraserait les modifs en mémoire)
+  renderStock();
+  renderAchats();
 }
 function removeStockFromPurchase(p){
   if(p.stockStatus!=="local")return;
@@ -1750,14 +1743,43 @@ function submitSale(){
   };
   sales=[ns,...sales];
 
-  // Deduct stock for each line
+  // Deduct stock — grouped by product + type (local vs précommande)
+  const saleGrouped={};
   lines.forEach(l=>{
     if(!l.linkedStockId)return;
-    const stockItem=stock.find(s=>String(s.id)===String(l.linkedStockId));
-    stock=stock.map(s=>String(s.id)===String(l.linkedStockId)?{...s,qty:Math.max(0,s.qty-l.qty),lastUpdate:date}:s);
-    // Atomic deduction in Supabase
-    dbRpc("deduct_stock",{p_stock_id:l.linkedStockId,p_qty:l.qty,p_date:date});
-    if(stockItem?.shopifyVariantId) deductShopifyStock(stockItem, l.qty);
+    const key=String(l.linkedStockId)+(l.preorder?"_pre_"+(l.preorderType||""):"");
+    if(!saleGrouped[key]) saleGrouped[key]={linkedStockId:l.linkedStockId,totalQty:0,totalValue:0,preorder:l.preorder||false,preorderType:l.preorderType||""};
+    saleGrouped[key].totalQty+=l.qty;
+    saleGrouped[key].totalValue+=l.qty*(l.unitHT||0);
+  });
+  Object.values(saleGrouped).forEach(g=>{
+    const stockItem=stock.find(s=>String(s.id)===String(g.linkedStockId));
+    if(!stockItem)return;
+    if(g.preorder){
+      // Précommande : déduire dans les lignes d'achat (livraison/préparation)
+      let qtyToDeduct=g.totalQty;
+      purchases=purchases.map(p=>{
+        if(p.stockStatus!==g.preorderType||qtyToDeduct<=0)return p;
+        let localQty=qtyToDeduct;
+        const newLines=(p._lines||[]).map(l=>{
+          if(String(l.linkedStockId)!==String(g.linkedStockId)||localQty<=0)return l;
+          const deduct=Math.min(l.qty,localQty);
+          localQty-=deduct;
+          qtyToDeduct-=deduct;
+          return{...l,qty:l.qty-deduct};
+        });
+        const newQty=newLines.reduce((s,l)=>s+l.qty,0);
+        if(newQty!==p.qty){
+          dbPatch("purchases",{id:p.id,qty:newQty,lines:newLines,amount_ht:parseFloat((newQty*(p.unitHT||0)).toFixed(2))});
+        }
+        return{...p,qty:newQty,_lines:newLines,amountHT:parseFloat((newQty*(p.unitHT||0)).toFixed(2))};
+      });
+    } else {
+      // Stock local : déduction normale
+      stock=stock.map(s=>String(s.id)===String(g.linkedStockId)?{...s,qty:Math.max(0,s.qty-g.totalQty),lastUpdate:date}:s);
+      dbRpc("deduct_stock",{p_stock_id:g.linkedStockId,p_qty:g.totalQty,p_date:date});
+      if(stockItem?.shopifyVariantId) deductShopifyStock(stockItem,g.totalQty);
+    }
   });
 
   if(clientObj)clients=clients.map(c=>String(c.id)===String(clientObj.id)?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
@@ -1970,7 +1992,8 @@ async function submitPurchase(){
   // Save new supplier if created
   if(supSel==="__new__"&&supplierId){const sup=suppliers.find(x=>String(x.id)===String(supplierId));if(sup)dbPost("suppliers",{name:sup.name,contact:sup.contact||null,email:sup.email||null,phone:sup.phone||null}).then(r=>{if(r&&r[0])sup.id=r[0].id;});}
   closeModal();renderAchats();
-  setTimeout(reloadStock, 500);
+  // Pas de reloadStock() — il écraserait les modifs en mémoire appliquées par addStockFromPurchase
+  renderStock();
   notify(`✅ Achat enregistré · ${lines.length} produit${lines.length>1?"s":""} · ${fmtEur(totalHT)} HT`);
 }
 
