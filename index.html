@@ -1713,8 +1713,9 @@ function submitSale(){
         if(s&&s.qty<qty&&!confirm(`⚠ Stock insuffisant pour "${prodName}" : ${s.qty} u. dispo, ${qty} vendues. Continuer ?`))return;
       }
     }
-    const isPreorder4=opt3?.getAttribute("data-preorder")==="true";
-    const preorderType4=opt3?.getAttribute("data-preorder-type")||"";
+    const opt4=prodSel?.options[prodSel.selectedIndex];
+    const isPreorder4=opt4?.getAttribute("data-preorder")==="true";
+    const preorderType4=opt4?.getAttribute("data-preorder-type")||"";
     lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId:linkedStockId||null,preorder:isPreorder4,preorderType:preorderType4});
   }
   if(!lines.length){notify("⚠ Ajoutez au moins un produit");return;}
@@ -1890,8 +1891,9 @@ async function submitPurchase(){
       prodName=prodSel.options[prodSel.selectedIndex]?.text||"Produit";
       stock=stock.map(s=>String(s.id)===String(linkedStockId)?{...s,unitCostHT:uht}:s);
     }
-    const isPreorder4=opt3?.getAttribute("data-preorder")==="true";
-    const preorderType4=opt3?.getAttribute("data-preorder-type")||"";
+    const opt4=prodSel?.options[prodSel.selectedIndex];
+    const isPreorder4=opt4?.getAttribute("data-preorder")==="true";
+    const preorderType4=opt4?.getAttribute("data-preorder-type")||"";
     lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId:linkedStockId||null,preorder:isPreorder4,preorderType:preorderType4});
   }
   if(!lines.length){notify("⚠ Ajoutez au moins un produit");return;}
