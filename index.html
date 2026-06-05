@@ -1097,7 +1097,7 @@ function openClientDetail(id){
           <td style="font-size:12px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.product}</td>
           <td style="font-weight:700;color:var(--green)">${fmtEur(s.totalTTC)}</td>
           <td style="font-size:12px;color:var(--muted)">${fmtDate(s.date)}</td>
-          <td>${s.source==="shopify"?`<span class="badge bg">Shopify</span>`:`<span class="badge bo">Manuel</span>`}</td>
+          <td>${s.source==="shopify"?`<span class="badge bg">Shopify</span>`:s._lines?.some(l=>l.preorder)?`<span style="background:#fff4ec;color:#c45e0a;border:1px solid #f6c89a;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">🚚 Précommande</span>`:`<span class="badge bo">Manuel</span>`}</td>
         </tr>`).join("")}
       </tbody></table>
     </div>`}
@@ -1554,7 +1554,23 @@ async function submitSendMail(id){
 
 // ═══════════════════════════ MODALS — VENTE ═══════════════════════════════════
 // ═══════════════════════════ MODALS — VENTE (multiproduits) ══════════════════
-function getStockOpts(){return stock.map(s=>`<option value="${s.id}" data-cost="${s.unitCostHT||0}" data-qty="${s.qty}" data-name="${s.name}" data-id="${s.id}">${s.name} (${s.qty} u.)</option>`).join("");}
+function getStockOpts(){
+  const ws=getStockWithStatus();
+  const opts=[];
+  // Produits en stock local
+  ws.filter(s=>s.qty>0).forEach(s=>{
+    opts.push(`<option value="${s.id}" data-cost="${s.unitCostHT||0}" data-qty="${s.qty}" data-name="${s.name}" data-preorder="false">${s.name} (${s.qty} u. — local)</option>`);
+  });
+  // Produits en livraison
+  ws.filter(s=>s.qtyLiv>0).forEach(s=>{
+    opts.push(`<option value="${s.id}" data-cost="${s.costLiv||s.unitCostHT||0}" data-qty="${s.qtyLiv}" data-name="${s.name}" data-preorder="true" data-preorder-type="livraison">🚚 ${s.name} (${s.qtyLiv} u. — en livraison)</option>`);
+  });
+  // Produits en préparation
+  ws.filter(s=>s.qtyPrep>0).forEach(s=>{
+    opts.push(`<option value="${s.id}" data-cost="${s.costPrep||s.unitCostHT||0}" data-qty="${s.qtyPrep}" data-name="${s.name}" data-preorder="true" data-preorder-type="preparation">⏳ ${s.name} (${s.qtyPrep} u. — en préparation)</option>`);
+  });
+  return opts.join("");
+}
 
 function openAddSale(){
   const clientOpts=clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
