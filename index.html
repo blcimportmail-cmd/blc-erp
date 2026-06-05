@@ -946,6 +946,127 @@ function getVentesFiltered(all){
   return all;
 }
 
+
+function openSaleDetail(id){
+  const s=[...sales,...shopify].find(x=>String(x.id)===String(id));
+  if(!s)return;
+
+  // Calcul rentabilité par ligne
+  const hasLines=(s._lines&&s._lines.length>0)||(s.lineItems&&s.lineItems.length>0);
+  const lines=s._lines||s.lineItems||[];
+  const shippingTTC=(s.shipping||0)*1.2;
+  const totalRevenueHT=(s.totalTTC-shippingTTC)/1.2;
+
+  // Calculer coût et marge par ligne
+  let totalCostHT=0;
+  const lineDetails=[];
+
+  if(hasLines&&lines.length){
+    lines.forEach(l=>{
+      let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
+      if(!p){const pn=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pn));if(!p)p=fuzzyMatch(pn,stock,"name");}
+      const qty=l.qty||1;
+      const coutUnit=p?.unitCostHT||0;
+      const coutLigne=qty*coutUnit;
+      const caLigne=l.totalHT||((l.unitHT||0)*qty);
+      const margeLigne=caLigne-coutLigne;
+      const pct=caLigne>0?((margeLigne/caLigne)*100):0;
+      totalCostHT+=coutLigne;
+      lineDetails.push({name:l.product||l.name||"?",qty,coutUnit,coutLigne,caLigne,margeLigne,pct,hasCost:coutUnit>0});
+    });
+  } else if(s.linkedStockId){
+    const p=stock.find(x=>String(x.id)===String(s.linkedStockId));
+    const qty=s.qty||1;
+    const coutUnit=p?.unitCostHT||0;
+    const coutLigne=qty*coutUnit;
+    const margeLigne=totalRevenueHT-coutLigne;
+    const pct=totalRevenueHT>0?((margeLigne/totalRevenueHT)*100):0;
+    totalCostHT=coutLigne;
+    lineDetails.push({name:p?.name||s.product||"?",qty,coutUnit,coutLigne,caLigne:totalRevenueHT,margeLigne,pct,hasCost:coutUnit>0});
+  }
+
+  const margeNette=totalRevenueHT-totalCostHT;
+  const margeGlobPct=totalRevenueHT>0?((margeNette/totalRevenueHT)*100):0;
+  const hasCost=totalCostHT>0;
+
+  const barColor=pct=>pct>=30?"var(--green)":pct>=15?"var(--orange)":"var(--red)";
+
+  const linesHTML=lineDetails.map(l=>{
+    const pctClamped=Math.min(100,Math.max(0,l.pct));
+    return `<div style="padding:14px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        <div>
+          <span style="font-weight:700;color:var(--navy);font-size:14px">${l.name}</span>
+          <span style="color:var(--muted);font-size:12px;margin-left:8px">× ${l.qty} u.</span>
+        </div>
+        <div style="text-align:right">
+          <span style="font-weight:800;font-size:15px;color:${l.margeLigne>=0?'var(--green)':'var(--red)'}">${l.hasCost?fmtEur(l.margeLigne):'—'}</span>
+          ${l.hasCost?`<span style="font-size:11px;color:${barColor(l.pct)};font-weight:700;margin-left:6px">${l.pct.toFixed(1)}%</span>`:''}
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;font-size:12px;color:var(--muted);margin-bottom:8px">
+        <span>CA HT : <b style="color:var(--navy)">${fmtEur(l.caLigne)}</b></span>
+        <span>Achat : <b style="color:var(--navy)">${l.hasCost?fmtEur(l.coutLigne):'?'}</b></span>
+        ${l.hasCost?`<span>PMP/u : <b style="color:var(--navy)">${fmtEur(l.coutUnit)}</b></span>`:''}
+      </div>
+      ${l.hasCost?`<div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
+        <div style="height:100%;width:${pctClamped}%;background:${barColor(l.pct)};border-radius:4px;transition:width 0.5s ease"></div>
+      </div>`:'<span style="font-size:11px;color:var(--muted);font-style:italic">PMP non renseigné dans le stock</span>'}
+    </div>`;
+  }).join("");
+
+  const globalBar=Math.min(100,Math.max(0,margeGlobPct));
+
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal modal-wide">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title">📊 Rentabilité — ${s.client}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${fmtDate(s.date)} · ${s.invoiceNum||s.source} · ${s.qty||1} unités</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <!-- Récap global -->
+    <div style="background:var(--navy);border-radius:12px;padding:18px 20px;margin-bottom:20px;display:flex;gap:24px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">CA HT lot</div>
+        <div style="font-size:22px;font-weight:900;color:#fff">${fmtEur(totalRevenueHT)}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Coût achat HT</div>
+        <div style="font-size:22px;font-weight:900;color:rgba(255,255,255,0.75)">${hasCost?fmtEur(totalCostHT):'?'}</div>
+      </div>
+      <div style="flex:1;min-width:140px">
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Marge nette lot</div>
+        <div style="font-size:22px;font-weight:900;color:${margeNette>=0?'var(--orange)':'#ff6b6b'}">${hasCost?fmtEur(margeNette):'—'}</div>
+      </div>
+      ${hasCost?`<div style="min-width:80px;text-align:right">
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Taux marge</div>
+        <div style="font-size:28px;font-weight:900;color:${margeGlobPct>=20?'var(--orange)':margeGlobPct>=10?'#fbbf24':'#ff6b6b'}">${margeGlobPct.toFixed(1)}<span style="font-size:16px">%</span></div>
+      </div>`:''}
+    </div>
+
+    ${hasCost?`<!-- Barre globale -->
+    <div style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px">
+        <span>Rentabilité globale du lot</span><span style="font-weight:700;color:${barColor(margeGlobPct)}">${margeGlobPct.toFixed(1)}%</span>
+      </div>
+      <div style="background:var(--border);border-radius:6px;height:10px;overflow:hidden">
+        <div style="height:100%;width:${globalBar}%;background:${barColor(margeGlobPct)};border-radius:6px;transition:width 0.6s ease"></div>
+      </div>
+    </div>`:''}
+
+    <!-- Détail par produit -->
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700;margin-bottom:8px">Détail par produit</div>
+    <div>${linesHTML||`<div style="color:var(--muted);font-style:italic;padding:12px 0">Aucune ligne détaillée disponible</div>`}</div>
+
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Fermer</button>
+      ${s.source==="manual"?`<button class="btn btn-ghost" style="flex:1" onclick="closeModal();dlInvoice('${s.id}')">🧾 Facture</button>`:''}
+    </div>
+  </div></div>`);
+}
+
 function renderVentes(){
   let all=[...sales,...shopify];
   if(sortVentes==="date_desc")all=all.sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -959,7 +1080,7 @@ function renderVentes(){
   document.getElementById("ventes-date-th").innerHTML=`Date ${sortBtn}`;
   document.getElementById("ventes-body").innerHTML=filtered.length===0
     ?`<tr><td colspan="8" class="empty-state">Aucune vente ${ventesFilter!=="all"?"sur cette période":""}</td></tr>`
-    :filtered.map(s=>`<tr>
+    :filtered.map(s=>`<tr style="cursor:pointer" onclick="openSaleDetail('${s.id}')">
     <td style="font-weight:700;color:var(--orange);font-family:monospace;font-size:12px">${s.invoiceNum||"—"}</td>
     <td style="font-weight:600">${s.client}</td>
     <td style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.product}">${s.product}</td>
@@ -967,7 +1088,7 @@ function renderVentes(){
     <td style="font-weight:700;color:var(--green)">${fmtEur(s.totalTTC)}</td>
     <td style="color:var(--muted)">${fmtDate(s.date)}</td>
     <td>${badge(s.source==="shopify"?"Shopify":"Manuel",s.source==="shopify"?"bg":"bo")}</td>
-    <td><button class="btn btn-sm btn-ghost" onclick="dlInvoice('${s.id}')">🧾</button></td>
+    <td><button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();dlInvoice('${s.id}')">🧾</button></td>
   </tr>`).join("");
 }
 function toggleSortVentes(){sortVentes=sortVentes==="date_desc"?"date_asc":"date_desc";renderVentes();}
