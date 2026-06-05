@@ -694,7 +694,6 @@ function enrichLineItems(){
   });
 
   const allOrders = [...sales, ...shopify];
-  let enriched=0, failed=[];
   allOrders.forEach(s=>{
     const lines = s._lines || s.lineItems || [];
     if(!lines.length && s.linkedStockId) return;
@@ -706,15 +705,15 @@ function enrichLineItems(){
 
       // Stratégie 1 : variant_id direct sur la ligne
       if(l.shopifyVariantId && variantIndex[String(l.shopifyVariantId)]){
-        l.linkedStockId=variantIndex[String(l.shopifyVariantId)].id; enriched++; return;
+        l.linkedStockId=variantIndex[String(l.shopifyVariantId)].id; return;
       }
       // Stratégie 1b : nom Shopify explicitement renseigné dans la fiche stock
-      if(shopifyNameIndex[nname]){ l.linkedStockId=shopifyNameIndex[nname].id; enriched++; return; }
+      if(shopifyNameIndex[nname]){ l.linkedStockId=shopifyNameIndex[nname].id; return; }
       // Stratégie 2 : nom normalisé exact dans le stock ERP
-      if(nameIndex[nname]){ l.linkedStockId=nameIndex[nname].id; enriched++; return; }
+      if(nameIndex[nname]){ l.linkedStockId=nameIndex[nname].id; return; }
 
       // Stratégie 3 : nom parsé Shopify déjà vu dans une autre commande enrichie
-      if(shopifyParsedIndex[nname]){ l.linkedStockId=shopifyParsedIndex[nname]; enriched++; return; }
+      if(shopifyParsedIndex[nname]){ l.linkedStockId=shopifyParsedIndex[nname]; return; }
 
       // Stratégie 4 : matching souple — tous les mots >2 lettres du nom ERP
       // doivent être présents dans le nom Shopify (ERP est plus court, donc plus précis)
@@ -728,11 +727,9 @@ function enrichLineItems(){
         const score = matched.length / erpWords.length;
         if(score > bestScore && score >= 0.6){ bestScore=score; best=st; }
       });
-      if(best){ l.linkedStockId=best.id; enriched++; }
-      else failed.push(rawName);
+      if(best){ l.linkedStockId=best.id; }
     });
   });
-  console.log(`[enrichLineItems] ${enriched} lignes enrichies, échecs:`, [...new Set(failed)]);
 }
 function renderDashboard(){
   document.getElementById("dash-date").textContent=new Date().toLocaleDateString("fr-FR",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
@@ -764,7 +761,6 @@ function renderDashboard(){
   // Bénéfice produit sur la période
   // = CA HT - coût d'achat HT (si connu)
   let beneficeProduit=0;
-  let _dbgOk=0,_dbgFail=[];
   allSales.forEach(s=>{
     // Revenue HT produit = (totalTTC - shipping TTC) / 1.2
     const shippingTTC = (s.shipping||0) * 1.2;
@@ -830,11 +826,15 @@ function renderDashboard(){
             }
           }
 
-          // Fallback ou vente locale : PMP stock
+          // Fallback ou vente locale : coût au moment de la vente (si dispo) sinon PMP actuel
           if(!coutUnit){
-            let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
-            if(!p){const pname=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pname));if(!p)p=fuzzyMatch(pname,stock,"name");}
-            coutUnit=p?.unitCostHT||0;
+            if(l.costHT>0){
+              coutUnit=l.costHT; // coût figé au moment de la vente ✓
+            } else {
+              let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
+              if(!p){const pname=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pname));if(!p)p=fuzzyMatch(pname,stock,"name");}
+              coutUnit=p?.unitCostHT||0;
+            }
           }
 
           if(coutUnit>0) totalCostHT += lqty*coutUnit;
@@ -849,41 +849,10 @@ function renderDashboard(){
     // Only add to benefice if we have cost data
     if(totalCostHT > 0) {
       beneficeProduit += revenueHT - totalCostHT;
-      _dbgOk++;
-      console.log(`[vente] ${s.source} | CA HT:${revenueHT.toFixed(2)} | coût:${totalCostHT.toFixed(2)} | marge:${(revenueHT-totalCostHT).toFixed(2)} | prod:${(s.product||'').slice(0,40)}`);
-      if(totalCostHT > revenueHT){
-        const lines3=s._lines||s.lineItems||[];
-        lines3.forEach(l=>{
-          const p2=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
-          console.warn(`  ↳ ligne: "${l.product||l.name}" | qty:${l.qty} | linkedId:${l.linkedStockId} | stockName:"${p2?.name}" | PMP:${p2?.unitCostHT} | ligneCost:${(l.qty||1)*(p2?.unitCostHT||0)}`);
-        });
-        if(s.linkedStockId){
-          const p2=stock.find(x=>String(x.id)===String(s.linkedStockId));
-          console.warn(`  ↳ linkedStockId direct: "${p2?.name}" | qty:${s.qty} | PMP:${p2?.unitCostHT}`);
-        }
       }
     }
     // If no cost: don't include (avoids showing false inflated benefice)
-    else {
-      const lines2=s._lines||s.lineItems||[];
-      _dbgFail.push({src:s.source,prod:s.product?.slice(0,30),lines:lines2.length,lids:lines2.map(l=>l.linkedStockId)});
-    }
   });
-  console.log(`[bénéfice] OK:${_dbgOk} sans coût:${_dbgFail.length}`,_dbgFail.slice(0,5));
-  console.log(`[totaux] CA TTC:${totalCA.toFixed(2)} | beneficeProduit:${beneficeProduit.toFixed(2)} | nb ventes:${allSales.length} (${salesR.length} manuel + ${paid.length} shopify) | dashFrom:${dashFrom} dashTo:${dashTo}`);
-  let _sumMarges=0;
-  allSales.forEach(s=>{
-    const sHT=(s.totalTTC-(s.shipping||0)*1.2)/1.2;
-    const hasL=(s._lines&&s._lines.length>0)||(s.lineItems&&s.lineItems.length>0);
-    const lines4=s._lines||s.lineItems||[];
-    let cost4=0;
-    if(s.linkedStockId&&!hasL){const p=stock.find(x=>String(x.id)===String(s.linkedStockId));cost4=(p?.unitCostHT||0)*(s.qty||1);}
-    else lines4.forEach(l=>{const p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;if(p)cost4+=(l.qty||1)*p.unitCostHT;});
-    const m=sHT-cost4;
-    _sumMarges+=m;
-    console.log(`  [${s.source}] "${(s.client||'').slice(0,15)}" CA HT:${sHT.toFixed(0)} coût:${cost4.toFixed(0)} marge:${m.toFixed(0)} TTC:${s.totalTTC}`);
-  });
-  console.log(`[sum marges directes] ${_sumMarges.toFixed(2)} vs beneficeProduit:${beneficeProduit.toFixed(2)}`);
 
   // Charges proratées sur la période
   const chargesPeriod=chargesForRange(dashFrom,dashTo);
@@ -1059,12 +1028,17 @@ function openSaleDetail(id){
         }
       }
 
-      // Si pas précommande ou pas trouvé : PMP stock local
+      // Si pas précommande ou pas trouvé : coût figé au moment de la vente, sinon PMP actuel
       if(!coutUnit){
-        let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
-        if(!p){const pn=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pn));if(!p)p=fuzzyMatch(pn,stock,"name");}
-        coutUnit=p?.unitCostHT||0;
-        coutSource="stock local";
+        if(l.costHT>0){
+          coutUnit=l.costHT;
+          coutSource="coût vente";
+        } else {
+          let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
+          if(!p){const pn=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pn));if(!p)p=fuzzyMatch(pn,stock,"name");}
+          coutUnit=p?.unitCostHT||0;
+          coutSource="stock local (PMP actuel)";
+        }
       }
 
       const coutLigne=qty*coutUnit;
@@ -2060,7 +2034,8 @@ function submitSale(){
     const opt4=prodSel?.options[prodSel.selectedIndex];
     const isPreorder4=opt4?.getAttribute("data-preorder")==="true";
     const preorderType4=opt4?.getAttribute("data-preorder-type")||"";
-    lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId:linkedStockId||null,preorder:isPreorder4,preorderType:preorderType4});
+    const _costAtSale=(()=>{if(linkedStockId){const _st=stock.find(x=>String(x.id)===String(linkedStockId));if(isPreorder4&&preorderType4){const _sw=getStockWithStatus().find(x=>String(x.id)===String(linkedStockId));return preorderType4==="livraison"?(_sw?.costLiv||_st?.unitCostHT||0):(_sw?.costPrep||_st?.unitCostHT||0);}return _st?.unitCostHT||0;}return 0;})();
+    lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId:linkedStockId||null,preorder:isPreorder4,preorderType:preorderType4,costHT:_costAtSale});
   }
   if(!lines.length){notify("⚠ Ajoutez au moins un produit");return;}
 
@@ -2267,7 +2242,8 @@ async function submitPurchase(){
     const opt4=prodSel?.options[prodSel.selectedIndex];
     const isPreorder4=opt4?.getAttribute("data-preorder")==="true";
     const preorderType4=opt4?.getAttribute("data-preorder-type")||"";
-    lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId:linkedStockId||null,preorder:isPreorder4,preorderType:preorderType4});
+    const _costAtSale=(()=>{if(linkedStockId){const _st=stock.find(x=>String(x.id)===String(linkedStockId));if(isPreorder4&&preorderType4){const _sw=getStockWithStatus().find(x=>String(x.id)===String(linkedStockId));return preorderType4==="livraison"?(_sw?.costLiv||_st?.unitCostHT||0):(_sw?.costPrep||_st?.unitCostHT||0);}return _st?.unitCostHT||0;}return 0;})();
+    lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId:linkedStockId||null,preorder:isPreorder4,preorderType:preorderType4,costHT:_costAtSale});
   }
   if(!lines.length){notify("⚠ Ajoutez au moins un produit");return;}
 
