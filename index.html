@@ -963,16 +963,53 @@ function openSaleDetail(id){
 
   if(hasLines&&lines.length){
     lines.forEach(l=>{
-      let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
-      if(!p){const pn=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pn));if(!p)p=fuzzyMatch(pn,stock,"name");}
       const qty=l.qty||1;
-      const coutUnit=p?.unitCostHT||0;
-      const coutLigne=qty*coutUnit;
       const caLigne=l.totalHT||((l.unitHT||0)*qty);
+      let coutUnit=0;
+      let coutSource="stock";
+
+      if(l.preorder&&l.preorderType&&l.linkedStockId){
+        // Précommande : chercher le PMP dans les achats du bon statut
+        const relatedPurchases=purchases.filter(p=>
+          p.stockStatus===l.preorderType &&
+          (p._lines||[]).some(pl=>String(pl.linkedStockId)===String(l.linkedStockId))
+        );
+        if(relatedPurchases.length){
+          // Moyenne pondérée du prix d'achat sur les achats liés
+          let totalQty=0,totalVal=0;
+          relatedPurchases.forEach(p=>{
+            (p._lines||[]).forEach(pl=>{
+              if(String(pl.linkedStockId)===String(l.linkedStockId)){
+                totalQty+=pl.qty||0;
+                totalVal+=(pl.qty||0)*(pl.unitHT||p.unitHT||0);
+              }
+            });
+          });
+          if(totalQty>0){coutUnit=totalVal/totalQty;coutSource="achat";}
+        }
+        // Fallback : costLiv/costPrep depuis getStockWithStatus
+        if(!coutUnit){
+          const sw=getStockWithStatus().find(x=>String(x.id)===String(l.linkedStockId));
+          if(sw){
+            coutUnit=l.preorderType==="livraison"?(sw.costLiv||0):(sw.costPrep||0);
+            coutSource="achat (PMP)";
+          }
+        }
+      }
+
+      // Si pas précommande ou pas trouvé : PMP stock local
+      if(!coutUnit){
+        let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
+        if(!p){const pn=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pn));if(!p)p=fuzzyMatch(pn,stock,"name");}
+        coutUnit=p?.unitCostHT||0;
+        coutSource="stock local";
+      }
+
+      const coutLigne=qty*coutUnit;
       const margeLigne=caLigne-coutLigne;
       const pct=caLigne>0?((margeLigne/caLigne)*100):0;
       totalCostHT+=coutLigne;
-      lineDetails.push({name:l.product||l.name||"?",qty,coutUnit,coutLigne,caLigne,margeLigne,pct,hasCost:coutUnit>0});
+      lineDetails.push({name:l.product||l.name||"?",qty,coutUnit,coutLigne,caLigne,margeLigne,pct,hasCost:coutUnit>0,coutSource,preorder:l.preorder||false,preorderType:l.preorderType||""});
     });
   } else if(s.linkedStockId){
     const p=stock.find(x=>String(x.id)===String(s.linkedStockId));
@@ -1007,7 +1044,7 @@ function openSaleDetail(id){
       <div style="display:flex;gap:16px;font-size:12px;color:var(--muted);margin-bottom:8px">
         <span>CA HT : <b style="color:var(--navy)">${fmtEur(l.caLigne)}</b></span>
         <span>Achat : <b style="color:var(--navy)">${l.hasCost?fmtEur(l.coutLigne):'?'}</b></span>
-        ${l.hasCost?`<span>PMP/u : <b style="color:var(--navy)">${fmtEur(l.coutUnit)}</b></span>`:''}
+        ${l.hasCost?`<span>${l.preorder?'Prix achat':'PMP'}/u : <b style="color:var(--navy)">${fmtEur(l.coutUnit)}</b></span><span style="font-size:10px;color:var(--muted);font-style:italic;margin-left:4px">(${l.coutSource})</span>`:''}
       </div>
       ${l.hasCost?`<div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
         <div style="height:100%;width:${pctClamped}%;background:${barColor(l.pct)};border-radius:4px;transition:width 0.5s ease"></div>
