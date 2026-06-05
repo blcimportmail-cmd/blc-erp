@@ -663,29 +663,70 @@ function chargesForRange(from,to){
   },0);
 }
 
-// Enrichit tous les lineItems/lignes de vente existants avec linkedStockId
-// en matchant via shopifyVariantId (fiable) puis nom normalisé (fallback)
+// Enrichit tous les lineItems/lignes de vente avec linkedStockId
+// Utilise 4 stratégies par ordre de fiabilité
 function enrichLineItems(){
+  // Index 1 : shopifyVariantId → stockItem
+  const variantIndex = {};
+  stock.forEach(s=>{ if(s.shopifyVariantId) variantIndex[String(s.shopifyVariantId)]=s; });
+
+  // Index 2 : nom normalisé exact → stockItem
+  const nameIndex = {};
+  stock.forEach(s=>{ if(s.unitCostHT>0) nameIndex[normalize(s.name)]=s; });
+
+  // Index 3 : depuis les items Shopify liés, construire parsedName → stockItem
+  // ex: stock "Chemise tommy" a shopifyVariantId → son titre Shopify parsé est "chemises tommy hilfiger"
+  // On récupère ça via shopify[] orders déjà en mémoire
+  const shopifyParsedIndex = {};
+  shopify.forEach(o=>{
+    const lines = o.lineItems || o._lines || [];
+    lines.forEach(l=>{
+      // Si cette ligne a déjà un linkedStockId (vente récente enrichie), on indexe son nom parsé
+      if(l.linkedStockId && (l.product||l.name)){
+        const key = normalize(l.product||l.name||"");
+        if(!shopifyParsedIndex[key]) shopifyParsedIndex[key]=l.linkedStockId;
+      }
+    });
+  });
+
   const allOrders = [...sales, ...shopify];
+  let enriched=0, failed=[];
   allOrders.forEach(s=>{
     const lines = s._lines || s.lineItems || [];
+    if(!lines.length && s.linkedStockId) return;
+
     lines.forEach(l=>{
-      if(l.linkedStockId) return; // déjà enrichi
-      // Essai 1 : via shopifyVariantId sur le lineItem
-      if(l.shopifyVariantId){
-        const found = stock.find(x=>x.shopifyVariantId === l.shopifyVariantId);
-        if(found){l.linkedStockId=found.id;return;}
+      if(l.linkedStockId) return;
+      const rawName = l.product||l.name||"";
+      const nname = normalize(rawName);
+
+      // Stratégie 1 : variant_id direct sur la ligne
+      if(l.shopifyVariantId && variantIndex[String(l.shopifyVariantId)]){
+        l.linkedStockId=variantIndex[String(l.shopifyVariantId)].id; enriched++; return;
       }
-      // Essai 2 : via nom normalisé exact
-      const pname = normalize(l.product||l.name||"");
-      let found = stock.find(x=>normalize(x.name)===pname);
-      // Essai 3 : fuzzy match
-      if(!found) found = fuzzyMatch(l.product||l.name||"", stock, "name");
-      if(found) l.linkedStockId = found.id;
+      // Stratégie 2 : nom normalisé exact dans le stock ERP
+      if(nameIndex[nname]){ l.linkedStockId=nameIndex[nname].id; enriched++; return; }
+
+      // Stratégie 3 : nom parsé Shopify déjà vu dans une autre commande enrichie
+      if(shopifyParsedIndex[nname]){ l.linkedStockId=shopifyParsedIndex[nname]; enriched++; return; }
+
+      // Stratégie 4 : matching souple — tous les mots >2 lettres du nom ERP
+      // doivent être présents dans le nom Shopify (ERP est plus court, donc plus précis)
+      let best=null, bestScore=0;
+      stock.forEach(st=>{
+        if(!st.unitCostHT||st.unitCostHT<=0) return;
+        const erpWords = normalize(st.name).split(" ").filter(w=>w.length>2);
+        if(!erpWords.length) return;
+        const matched = erpWords.filter(w=>nname.includes(w));
+        // Score : proportion des mots ERP trouvés dans le nom Shopify
+        const score = matched.length / erpWords.length;
+        if(score > bestScore && score >= 0.6){ bestScore=score; best=st; }
+      });
+      if(best){ l.linkedStockId=best.id; enriched++; }
+      else failed.push(rawName);
     });
-    // Aussi pour les ventes sans _lines ni lineItems (vente simple linkedStockId sur la vente)
-    // déjà géré directement via s.linkedStockId dans le calcul
   });
+  console.log(`[enrichLineItems] ${enriched} lignes enrichies, échecs:`, [...new Set(failed)]);
 }
 function renderDashboard(){
   document.getElementById("dash-date").textContent=new Date().toLocaleDateString("fr-FR",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
@@ -2463,6 +2504,7 @@ async function loadShopifyOrders() {
           qty: realQty,
           shopifyLots: l.quantity,
           shopifyMultiplier: multiplier,
+          shopifyVariantId: l.variant_id || null,
           unitHT: parseFloat((parseFloat(l.price) / multiplier / 1.2).toFixed(4)),
           totalHT: parseFloat((parseFloat(l.price) * l.quantity / 1.2).toFixed(2)),
           linkedStockId: stockItem ? stockItem.id : null,
