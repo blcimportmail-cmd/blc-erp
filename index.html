@@ -663,6 +663,30 @@ function chargesForRange(from,to){
   },0);
 }
 
+// Enrichit tous les lineItems/lignes de vente existants avec linkedStockId
+// en matchant via shopifyVariantId (fiable) puis nom normalisé (fallback)
+function enrichLineItems(){
+  const allOrders = [...sales, ...shopify];
+  allOrders.forEach(s=>{
+    const lines = s._lines || s.lineItems || [];
+    lines.forEach(l=>{
+      if(l.linkedStockId) return; // déjà enrichi
+      // Essai 1 : via shopifyVariantId sur le lineItem
+      if(l.shopifyVariantId){
+        const found = stock.find(x=>x.shopifyVariantId === l.shopifyVariantId);
+        if(found){l.linkedStockId=found.id;return;}
+      }
+      // Essai 2 : via nom normalisé exact
+      const pname = normalize(l.product||l.name||"");
+      let found = stock.find(x=>normalize(x.name)===pname);
+      // Essai 3 : fuzzy match
+      if(!found) found = fuzzyMatch(l.product||l.name||"", stock, "name");
+      if(found) l.linkedStockId = found.id;
+    });
+    // Aussi pour les ventes sans _lines ni lineItems (vente simple linkedStockId sur la vente)
+    // déjà géré directement via s.linkedStockId dans le calcul
+  });
+}
 function renderDashboard(){
   document.getElementById("dash-date").textContent=new Date().toLocaleDateString("fr-FR",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
 
@@ -3456,10 +3480,11 @@ async function loadAllData(){
     // Sync invoice counter
     const ctr = await dbGet("invoice_counter","id=eq.1");
     if(Array.isArray(ctr)&&ctr[0]) globalInvCounter=ctr[0].current_value||0;
+    enrichLineItems();
     renderDashboard();
     notify("✅ Données chargées");
     // Auto-charger les commandes Shopify immédiatement
-    loadShopifyOrders().then(()=>renderDashboard()).catch(e=>console.warn("Shopify:",e.message));
+    loadShopifyOrders().then(()=>{enrichLineItems();renderDashboard();}).catch(e=>console.warn("Shopify:",e.message));
   } catch(e){
     console.error("loadAllData error",e);
     notify("⚠ Chargement local (Supabase non connecté)");
