@@ -940,33 +940,46 @@ function addStockFromPurchase(p){
   const grouped={};
   lines.forEach(l=>{
     if(!l.linkedStockId)return;
-    const key=String(l.linkedStockId);
-    if(!grouped[key]) grouped[key]={linkedStockId:l.linkedStockId,totalQty:0,totalValue:0};
+    const key=String(l.linkedStockId)+(l.preorder?"_pre_"+(l.preorderType||""):"");
+    if(!grouped[key]) grouped[key]={linkedStockId:l.linkedStockId,totalQty:0,totalValue:0,preorder:l.preorder||false,preorderType:l.preorderType||""};
     grouped[key].totalQty+=l.qty;
     grouped[key].totalValue+=l.qty*(l.unitHT||0);
   });
-  // Update local state AND call SQL RPC for atomic PMP in DB
   Object.values(grouped).forEach(g=>{
-    const avgCost=g.totalQty>0?g.totalValue/g.totalQty:0;
-    // Update local stock with PMP
-    stock=stock.map(s=>{
-      if(String(s.id)===String(g.linkedStockId)){
-        const oldQty=s.qty||0;
-        const newQty=oldQty+g.totalQty;
-        const pmp=newQty>0?((oldQty*(s.unitCostHT||0))+(g.totalQty*avgCost))/newQty:avgCost;
-        return {...s,qty:newQty,unitCostHT:parseFloat(pmp.toFixed(4)),lastUpdate:p.date};
-      }
-      return s;
-    });
-    // Call atomic SQL function — this handles concurrency correctly
-    dbRpc("update_stock_with_pmp",{
-      p_stock_id:g.linkedStockId,
-      p_new_qty:g.totalQty,
-      p_new_unit_cost:parseFloat(avgCost.toFixed(4)),
-      p_date:p.date
-    });
+    const stockItem=stock.find(s=>String(s.id)===String(g.linkedStockId));
+    if(!stockItem)return;
+    if(g.preorder){
+      // Précommande : réduire la qté dans les lignes d'achat (livraison/préparation)
+      let qtyToDeduct=g.totalQty;
+      purchases=purchases.map(p=>{
+        if(p.stockStatus!==g.preorderType)return p;
+        const newLines=(p._lines||[]).map(l=>{
+          if(String(l.linkedStockId)!==String(g.linkedStockId)||qtyToDeduct<=0)return l;
+          const deduct=Math.min(l.qty,qtyToDeduct);
+          qtyToDeduct-=deduct;
+          return{...l,qty:l.qty-deduct};
+        });
+        const newQty=newLines.reduce((s,l)=>s+l.qty,0);
+        if(newQty!==p.qty){
+          dbPatch("purchases",{id:p.id,qty:newQty,lines:newLines,amount_ht:parseFloat((newQty*(p.unitHT||0)).toFixed(2))});
+        }
+        return{...p,qty:newQty,_lines:newLines,amountHT:parseFloat((newQty*(p.unitHT||0)).toFixed(2))};
+      });
+    } else {
+      // Stock local : déduction normale avec PMP
+      const avgCost=g.totalQty>0?g.totalValue/g.totalQty:0;
+      stock=stock.map(s=>{
+        if(String(s.id)===String(g.linkedStockId)){
+          const oldQty=s.qty||0;
+          const newQty=Math.max(0,oldQty-g.totalQty);
+          return{...s,qty:newQty,lastUpdate:date};
+        }
+        return s;
+      });
+      dbRpc("deduct_stock",{p_stock_id:g.linkedStockId,p_qty:g.totalQty,p_date:date});
+      if(stockItem?.shopifyVariantId) deductShopifyStock(stockItem,g.totalQty);
+    }
   });
-  // Reload from DB to get accurate PMP from Supabase
   setTimeout(reloadStock, 500);
 }
 function removeStockFromPurchase(p){
