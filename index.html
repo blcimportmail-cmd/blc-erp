@@ -953,10 +953,11 @@ function addStockFromPurchase(p){
       let qtyToDeduct=g.totalQty;
       purchases=purchases.map(p=>{
         if(p.stockStatus!==g.preorderType)return p;
+        let localQty=g.totalQty;
         const newLines=(p._lines||[]).map(l=>{
-          if(String(l.linkedStockId)!==String(g.linkedStockId)||qtyToDeduct<=0)return l;
-          const deduct=Math.min(l.qty,qtyToDeduct);
-          qtyToDeduct-=deduct;
+          if(String(l.linkedStockId)!==String(g.linkedStockId)||localQty<=0)return l;
+          const deduct=Math.min(l.qty,localQty);
+          localQty-=deduct;
           return{...l,qty:l.qty-deduct};
         });
         const newQty=newLines.reduce((s,l)=>s+l.qty,0);
