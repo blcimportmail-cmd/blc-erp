@@ -694,8 +694,8 @@ function renderDashboard(){
   // = CA HT - coût d'achat HT (si connu)
   let beneficeProduit=0;
   allSales.forEach(s=>{
-    // Revenue HT for this sale
-    const revenueHT = s.totalTTC / 1.2;
+    // Revenue HT pour cette vente (sans frais de port)
+    const revenueHT = (s.totalTTC - (s.shipping||0)*1.2) / 1.2;
     // Find cost — only deduct if we actually have a cost set
     let totalCostHT = 0;
     const qty = s.qty || 1;
@@ -704,11 +704,15 @@ function renderDashboard(){
       if(p&&p.unitCostHT>0) totalCostHT = qty * p.unitCostHT;
     } else if(s._lines&&s._lines.length){
       s._lines.forEach(l=>{
-        const p=stock.find(x=>x.name.toLowerCase()===( l.product||"").toLowerCase().trim());
+        // Essayer exact puis fuzzy
+        let p=stock.find(x=>normalize(x.name)===normalize(l.product||""));
+        if(!p)p=fuzzyMatch(l.product||"",stock,"name");
         if(p&&p.unitCostHT>0) totalCostHT += (l.qty||1)*p.unitCostHT;
       });
     } else {
-      const p=stock.find(x=>(s.product||"").toLowerCase().includes(x.name.toLowerCase().split(" ").slice(0,2).join(" ").toLowerCase()));
+      // Essayer exact puis fuzzy
+      let p=stock.find(x=>normalize(x.name)===normalize(s.product||""));
+      if(!p)p=fuzzyMatch(s.product||"",stock,"name");
       if(p&&p.unitCostHT>0) totalCostHT = qty * p.unitCostHT;
     }
     // If no cost known: bénéfice = 0 for this sale (unknown margin)
