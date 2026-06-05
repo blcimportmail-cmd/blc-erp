@@ -764,6 +764,7 @@ function renderDashboard(){
   // Bénéfice produit sur la période
   // = CA HT - coût d'achat HT (si connu)
   let beneficeProduit=0;
+  let _dbgOk=0,_dbgFail=[];
   allSales.forEach(s=>{
     // Revenue HT produit = (totalTTC - shipping TTC) / 1.2
     const shippingTTC = (s.shipping||0) * 1.2;
@@ -798,9 +799,15 @@ function renderDashboard(){
     // Only add to benefice if we have cost data
     if(totalCostHT > 0) {
       beneficeProduit += revenueHT - totalCostHT;
+      _dbgOk++;
     }
     // If no cost: don't include (avoids showing false inflated benefice)
+    else {
+      const lines2=s._lines||s.lineItems||[];
+      _dbgFail.push({src:s.source,prod:s.product?.slice(0,30),lines:lines2.length,lids:lines2.map(l=>l.linkedStockId)});
+    }
   });
+  console.log(`[bénéfice] OK:${_dbgOk} sans coût:${_dbgFail.length}`,_dbgFail.slice(0,5));
 
   // Charges proratées sur la période
   const chargesPeriod=chargesForRange(dashFrom,dashTo);
