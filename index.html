@@ -980,7 +980,17 @@ function addStockFromPurchase(p){
       if(stockItem?.shopifyVariantId) deductShopifyStock(stockItem,g.totalQty);
     }
   });
-  setTimeout(reloadStock, 500);
+  // Recharger stock ET achats depuis Supabase après la vente
+  setTimeout(async()=>{
+    const [stk,purch]=await Promise.all([
+      dbGet("stock","order=name"),
+      dbGet("purchases","order=created_at.desc")
+    ]);
+    if(Array.isArray(stk)) stock=stk.map(rowToStock);
+    if(Array.isArray(purch)) purchases=purch.map(rowToPurchase);
+    renderStock();
+    renderAchats();
+  }, 800);
 }
 function removeStockFromPurchase(p){
   if(p.stockStatus!=="local")return;
