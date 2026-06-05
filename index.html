@@ -1705,9 +1705,13 @@ function submitSale(){
     else if(prodSel.value){
       prodName=prodSel.options[prodSel.selectedIndex]?.getAttribute("data-name")||"Produit";
       linkedStockId=prodSel.value;
-      // Stock check
-      const s=stock.find(x=>String(x.id)===String(linkedStockId));
-      if(s&&s.qty<qty&&!confirm(`⚠ Stock insuffisant pour "${prodName}" : ${s.qty} u. dispo, ${qty} vendues. Continuer ?`))return;
+      // Stock check — ignorer si précommande (livraison/préparation)
+      const opt3=prodSel.options[prodSel.selectedIndex];
+      const isPreorder3=opt3?.getAttribute("data-preorder")==="true";
+      if(!isPreorder3){
+        const s=stock.find(x=>String(x.id)===String(linkedStockId));
+        if(s&&s.qty<qty&&!confirm(`⚠ Stock insuffisant pour "${prodName}" : ${s.qty} u. dispo, ${qty} vendues. Continuer ?`))return;
+      }
     }
     lines.push({product:prodName,qty,unitHT:uht,totalHT:parseFloat((qty*uht).toFixed(2)),linkedStockId:linkedStockId||null});
   }
