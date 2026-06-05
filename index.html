@@ -1011,9 +1011,13 @@ function removeStockFromPurchase(p){
 function deletePurchase(id){
   if(!confirm("Supprimer cet achat ?"))return;
   const p=purchases.find(x=>String(x.id)===String(id));
-  if(p)removeStockFromPurchase(p);
+  // Stock local : retirer du stock physique
+  // Livraison/préparation : ne PAS toucher au stock local — qtyLiv/qtyPrep
+  // sont recalculées dynamiquement depuis purchases dans renderStock(),
+  // donc supprimer l'achat suffit à les retirer correctement.
+  if(p&&p.stockStatus==="local")removeStockFromPurchase(p);
   purchases=purchases.filter(x=>String(x.id)!==String(id));
-  renderAchats();notify("🗑 Achat supprimé");
+  renderAchats();renderStock();notify("🗑 Achat supprimé");
   dbDelete("purchases",id);
 }
 
