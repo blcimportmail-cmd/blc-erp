@@ -683,7 +683,9 @@ function enrichLineItems(){
   // On récupère ça via shopify[] orders déjà en mémoire
   const shopifyParsedIndex = {};
   shopify.forEach(o=>{
-    const lines = o.lineItems || o._lines || [];
+    let lines = o.lineItems || o._lines || [];
+    if(typeof lines === 'string'){try{lines=JSON.parse(lines);}catch(e){lines=[];}}
+    if(!Array.isArray(lines)) lines=[];
     lines.forEach(l=>{
       // Si cette ligne a déjà un linkedStockId (vente récente enrichie), on indexe son nom parsé
       if(l.linkedStockId && (l.product||l.name)){
@@ -695,7 +697,9 @@ function enrichLineItems(){
 
   const allOrders = [...sales, ...shopify];
   allOrders.forEach(s=>{
-    const lines = s._lines || s.lineItems || [];
+    let lines = s._lines || s.lineItems || [];
+    if(typeof lines === 'string'){try{lines=JSON.parse(lines);}catch(e){lines=[];}}
+    if(!Array.isArray(lines)) lines=[];
     if(!lines.length && s.linkedStockId) return;
 
     lines.forEach(l=>{
@@ -3775,7 +3779,7 @@ async function dbDelete(table, id) {
 // Convert Supabase row → local format
 function rowToClient(r){return {id:r.id,name:r.name,address:r.address||"",zipCity:r.zip_city||"",siret:r.siret||"",tvaIntra:r.tva_intra||"",email:r.email||"",phone:r.phone||"",totalPurchases:parseFloat(r.total_purchases||0)};}
 function rowToStock(r){return {id:r.id,name:r.name,qty:r.qty||0,reserved:r.reserved||0,unitCostHT:parseFloat(r.unit_cost_ht||0),shopifyLinked:r.shopify_linked||false,shopifyProductId:r.shopify_product_id,shopifyVariantId:r.shopify_variant_id,shopifyMultiplier:r.shopify_multiplier||1,shopifyName:r.shopify_name||'',lastUpdate:r.last_update};}
-function rowToSale(r){return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:r.lines||[],lineItems:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id,shopifyOrderId:r.shopify_order_id};}
+function rowToSale(r){const _l=(r.lines&&typeof r.lines==="string")?JSON.parse(r.lines):(r.lines||[]);return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:_l,lineItems:_l,qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id,shopifyOrderId:r.shopify_order_id};}
 function rowToPurchase(r){return {id:r.id,supplier:r.supplier_name,supplierId:r.supplier_id,description:r.description,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),amountHT:parseFloat(r.amount_ht||0),date:r.date,hasInvoice:r.has_invoice,invoiceFile:r.invoice_file,stockStatus:r.stock_status,linkedStockId:r.linked_stock_id};}
 function rowToCharge(r){return {id:r.id,name:r.name,type:r.type,category:r.category,amountHT:parseFloat(r.amount_ht||0),period:r.period,note:r.note,active:r.active!==false};}
 function rowToTodo(r){return {id:r.id,title:r.title,description:r.description,assigned_to:r.assigned_to,created_by:r.created_by,due_date:r.due_date,priority:r.priority||"normal",status:r.status||"todo",is_global:r.is_global,created_at:r.created_at};}
