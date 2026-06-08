@@ -1177,8 +1177,7 @@ function openEditSaleCost(id){
   </div></div>`);
 }
 
-function saveSaleCost(id){
-  const sIdx=[...sales,...shopify].findIndex(x=>String(x.id)===String(id));
+async function saveSaleCost(id){
   const s=[...sales,...shopify].find(x=>String(x.id)===String(id));
   if(!s)return;
   const lines=s._lines||s.lineItems||[];
@@ -1186,13 +1185,19 @@ function saveSaleCost(id){
     const input=document.getElementById("edit-cost-"+i);
     if(input) l.costHT=parseFloat(input.value)||0;
   });
+  // Pour les ventes Shopify, retrouver le UUID Supabase via shopify_order_id
+  let supabaseId = s.id;
+  if(s.source==="shopify" && s.shopifyOrderId){
+    const existing = await dbGet("sales", `shopify_order_id=eq.${s.shopifyOrderId}&select=id`);
+    if(existing&&existing[0]) supabaseId = existing[0].id;
+  }
   // Persist to Supabase
-  dbPatch("sales",{id:s.id, lines:lines});
+  await dbPatch("sales", {id: supabaseId, lines: lines});
   // Update in memory
   if(s.source==="manual"){
     sales=sales.map(x=>String(x.id)===String(id)?{...x,_lines:lines}:x);
   } else {
-    shopify=shopify.map(x=>String(x.id)===String(id)?{...x,lineItems:lines}:x);
+    shopify=shopify.map(x=>String(x.id)===String(id)?{...x,lineItems:lines,id:supabaseId}:x);
   }
   closeModal();
   notify("✅ Coûts mis à jour");
