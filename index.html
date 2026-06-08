@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>BLC Import — ERP Pro</title> 
+<title>BLC Import — ERP Pro</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>  
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -829,11 +829,15 @@ function renderDashboard(){
           // Fallback ou vente locale : coût au moment de la vente (si dispo) sinon PMP actuel
           if(!coutUnit){
             if(l.costHT>0){
-              coutUnit=l.costHT; // coût figé au moment de la vente ✓
+              // costHT est le coût total de la ligne (pas unitaire)
+              totalCostHT += l.costHT;
+              return;
             } else {
               let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
               if(!p){const pname=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pname));if(!p)p=fuzzyMatch(pname,stock,"name");}
-              coutUnit=p?.unitCostHT||0;
+              // Pour Shopify : appliquer le multiplicateur
+              const mult3=l.shopifyMultiplier||1;
+              coutUnit=(p?.unitCostHT||0)*mult3;
             }
           }
 
@@ -1030,12 +1034,15 @@ function openSaleDetail(id){
       // Si pas précommande ou pas trouvé : coût figé au moment de la vente, sinon PMP actuel
       if(!coutUnit){
         if(l.costHT>0){
-          coutUnit=l.costHT;
+          // costHT = coût total de la ligne figé
+          coutUnit=l.costHT/Math.max(1,qty);
           coutSource="coût vente";
         } else {
           let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
           if(!p){const pn=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pn));if(!p)p=fuzzyMatch(pn,stock,"name");}
-          coutUnit=p?.unitCostHT||0;
+          // Pour Shopify : appliquer le multiplicateur
+          const mult=l.shopifyMultiplier||1;
+          coutUnit=(p?.unitCostHT||0)*mult;
           coutSource="stock local (PMP actuel)";
         }
       }
