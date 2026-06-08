@@ -2815,9 +2815,9 @@ async function loadShopifyOrders() {
         const existingOrder = shopify.find(ex =>
           String(ex.shopifyOrderId) === String(o.id) || String(ex.id) === String(o.id)
         );
-        const existingLine = existingOrder?.lineItems?.find(el =>
-          el.shopifyVariantId === l.variant_id || normalize(el.product||"") === normalize(name)
-        );
+        // Matcher par index de position pour éviter les doublons de même produit
+        const _lineIdx = o.line_items.indexOf(l);
+        const existingLine = existingOrder?.lineItems?.[_lineIdx];
         return {
           product: name,
           qty: realQty,
