@@ -1157,12 +1157,16 @@ function openEditSaleCost(id){
   }
 
   const linesHTML=lines.map((l,i)=>{
-    const currentCost=l.costHT>0?l.costHT:((l.shopifyMultiplier||1)*(stock.find(x=>String(x.id)===String(l.linkedStockId))?.unitCostHT||0));
+    const stockItem=stock.find(x=>String(x.id)===String(l.linkedStockId));
+    const mult=l.shopifyMultiplier||1;
+    const qty=l.shopifyLots||l.qty||1;
+    // costHT = coût total de la ligne. Si pas figé, calculer : lots × mult × PMP
+    const currentCost=l.costHT>0?l.costHT:parseFloat((qty*mult*(stockItem?.unitCostHT||0)).toFixed(2));
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="font-weight:600;color:var(--navy);margin-bottom:6px">${l.product||l.name} × ${l.qty}</div>
+      <div style="font-weight:600;color:var(--navy);margin-bottom:6px">${l.product||l.name} × ${l.qty} u. (${qty} lot${qty>1?'s':''})</div>
       <div style="display:flex;align-items:center;gap:10px">
         <label style="font-size:12px;color:var(--muted);min-width:120px">Coût total HT (€)</label>
-        <input class="input" type="number" step="0.01" id="edit-cost-${i}" value="${currentCost.toFixed(2)}" style="width:120px;padding:6px 10px"/>
+        <input class="input" type="number" step="0.01" id="edit-cost-line-${i}" value="${currentCost.toFixed(2)}" style="width:120px;padding:6px 10px"/>
       </div>
     </div>`;
   }).join("");
@@ -1186,7 +1190,7 @@ async function saveSaleCost(id){
   if(!s)return;
   const lines=s._lines||s.lineItems||[];
   lines.forEach((l,i)=>{
-    const input=document.getElementById("edit-cost-"+i);
+    const input=document.getElementById("edit-cost-line-"+i);
     if(input) l.costHT=parseFloat(input.value)||0;
   });
   // Pour les ventes Shopify, retrouver le UUID Supabase via shopify_order_id
