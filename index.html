@@ -2803,7 +2803,10 @@ async function loadShopifyOrders() {
           stockItem=best;
         }
         // Récupérer costHT figé depuis Supabase (si déjà sauvegardé)
-        const existingOrder = shopify.find(ex => ex.id === o.id.toString());
+        // Matcher via shopifyOrderId (pas id qui peut être UUID Supabase)
+        const existingOrder = shopify.find(ex =>
+          String(ex.shopifyOrderId) === String(o.id) || String(ex.id) === String(o.id)
+        );
         const existingLine = existingOrder?.lineItems?.find(el =>
           el.shopifyVariantId === l.variant_id || normalize(el.product||"") === normalize(name)
         );
