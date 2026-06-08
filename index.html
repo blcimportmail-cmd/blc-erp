@@ -835,9 +835,7 @@ function renderDashboard(){
             } else {
               let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
               if(!p){const pname=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pname));if(!p)p=fuzzyMatch(pname,stock,"name");}
-              // Pour Shopify : appliquer le multiplicateur
-              const mult3=l.shopifyMultiplier||1;
-              coutUnit=(p?.unitCostHT||0)*mult3;
+              coutUnit=p?.unitCostHT||0;
             }
           }
 
@@ -1040,9 +1038,7 @@ function openSaleDetail(id){
         } else {
           let p=l.linkedStockId?stock.find(x=>String(x.id)===String(l.linkedStockId)):null;
           if(!p){const pn=l.product||l.name||"";p=stock.find(x=>normalize(x.name)===normalize(pn));if(!p)p=fuzzyMatch(pn,stock,"name");}
-          // Pour Shopify : appliquer le multiplicateur
-          const mult=l.shopifyMultiplier||1;
-          coutUnit=(p?.unitCostHT||0)*mult;
+          coutUnit=p?.unitCostHT||0;
           coutSource="stock local (PMP actuel)";
         }
       }
