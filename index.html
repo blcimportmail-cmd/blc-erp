@@ -2797,6 +2797,11 @@ async function loadShopifyOrders() {
           });
           stockItem=best;
         }
+        // Récupérer costHT figé depuis Supabase (si déjà sauvegardé)
+        const existingOrder = shopify.find(ex => ex.id === o.id.toString());
+        const existingLine = existingOrder?.lineItems?.find(el =>
+          el.shopifyVariantId === l.variant_id || normalize(el.product||"") === normalize(name)
+        );
         return {
           product: name,
           qty: realQty,
@@ -2806,6 +2811,7 @@ async function loadShopifyOrders() {
           unitHT: parseFloat((parseFloat(l.price) / multiplier / 1.2).toFixed(4)),
           totalHT: parseFloat((parseFloat(l.price) * l.quantity / 1.2).toFixed(2)),
           linkedStockId: stockItem ? stockItem.id : null,
+          costHT: existingLine?.costHT || null,
         };
       }),
       qty: o.line_items.reduce((s, l) => {
