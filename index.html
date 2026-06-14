@@ -1275,20 +1275,9 @@ function renderVentes(){
 function toggleSortVentes(){sortVentes=sortVentes==="date_desc"?"date_asc":"date_desc";renderVentes();}
 
 // ═══════════════════════════ ACHATS ══════════════════════════════════════════
-function openDeductStock(purchaseId){
-  const p=purchases.find(x=>String(x.id)===String(purchaseId));
-  if(!p)return;
-  const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,product:p.description||p.supplier,qty:p.qty,unitHT:p.unitHT}];
-  const linesHTML=lines.map((l,i)=>{
-    const st=l.linkedStockId?stock.find(s=>String(s.id)===String(l.linkedStockId)):null;
-    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="font-weight:600;color:var(--navy);margin-bottom:6px">${st?.name||l.product} <span style="color:var(--muted);font-size:12px">(stock actuel : ${st?.qty||0} u.)</span></div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <label style="font-size:12px;color:var(--muted);min-width:100px">Qté à retirer</label>
-        <input class="input" type="number" min="0" step="1" id="deduct-qty-${i}" value="0" style="width:100px;padding:6px 10px"/>
-      </div>
-    </div>`;
-  }).join("");
+function openDeductStock(stockId){
+  const s=stock.find(x=>String(x.id)===String(stockId));
+  if(!s)return;
 
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr">
@@ -1296,7 +1285,13 @@ function openDeductStock(purchaseId){
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Indiquez la quantité à retirer et le motif</div>
-    ${linesHTML}
+    <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="font-weight:600;color:var(--navy);margin-bottom:6px">${s.name} <span style="color:var(--muted);font-size:12px">(stock actuel : ${s.qty} u.)</span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="font-size:12px;color:var(--muted);min-width:100px">Qté à retirer</label>
+        <input class="input" type="number" min="1" max="${s.qty}" step="1" id="deduct-qty-0" value="0" style="width:120px;padding:6px 10px"/>
+      </div>
+    </div>
     <div style="margin-top:16px">
       <label style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px;display:block">Motif</label>
       <div style="display:flex;gap:10px">
@@ -1307,7 +1302,7 @@ function openDeductStock(purchaseId){
     </div>
     <div style="margin-top:18px;display:flex;gap:10px">
       <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Annuler</button>
-      <button class="btn btn-danger" style="flex:1" onclick="confirmDeductStock('${purchaseId}')">✅ Confirmer le retrait</button>
+      <button class="btn btn-danger" style="flex:1" onclick="confirmDeductStock('${s.id}')">✅ Confirmer le retrait</button>
     </div>
   </div></div>`);
 }
@@ -1324,30 +1319,22 @@ function selectMotif(m){
     :"Le stock sera retiré et enregistré comme une charge (perte).";
 }
 
-async function confirmDeductStock(purchaseId){
-  const p=purchases.find(x=>String(x.id)===String(purchaseId));
-  if(!p)return;
-  const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,product:p.description||p.supplier,qty:p.qty,unitHT:p.unitHT}];
+async function confirmDeductStock(stockId){
+  const st=stock.find(x=>String(x.id)===String(stockId));
+  if(!st)return;
+  const qty=parseInt(document.getElementById("deduct-qty-0")?.value||0);
+  if(!qty||qty<=0){notify("⚠ Quantité invalide");return;}
   const today=new Date().toISOString().split("T")[0];
-  let totalPerdu=0;
 
-  lines.forEach((l,i)=>{
-    const qtyInput=document.getElementById("deduct-qty-"+i);
-    const qty=parseInt(qtyInput?.value||0);
-    if(!qty||qty<=0)return;
-    const st=l.linkedStockId?stock.find(s=>String(s.id)===String(l.linkedStockId)):null;
-    if(!st)return;
-    const newQty=Math.max(0,(st.qty||0)-qty);
-    stock=stock.map(s=>String(s.id)===String(l.linkedStockId)?{...s,qty:newQty}:s);
-    dbRpc("deduct_stock",{p_stock_id:l.linkedStockId,p_qty:qty,p_date:today});
-    if(st.shopifyVariantId) syncStockToShopify({...st,qty:newQty});
-    if(_deductMotif==="perte") totalPerdu+=qty*(st.unitCostHT||l.unitHT||0);
-  });
+  const newQty=Math.max(0,(st.qty||0)-qty);
+  stock=stock.map(s=>String(s.id)===String(stockId)?{...s,qty:newQty}:s);
+  dbRpc("deduct_stock",{p_stock_id:stockId,p_qty:qty,p_date:today});
+  if(st.shopifyVariantId) syncStockToShopify({...st,qty:newQty});
 
-  if(_deductMotif==="perte"&&totalPerdu>0){
-    // Enregistrer comme charge
+  if(_deductMotif==="perte"){
+    const totalPerdu=qty*(st.unitCostHT||0);
     const charge={
-      label:`Perte stock — ${p.description||p.supplier}`,
+      label:`Perte stock — ${st.name}`,
       amount_ht:parseFloat(totalPerdu.toFixed(2)),
       date:today,
       category:"perte",
@@ -1364,7 +1351,6 @@ async function confirmDeductStock(purchaseId){
 
   closeModal();
   renderStock();
-  renderAchats();
 }
 
 function renderAchats(){
@@ -1398,10 +1384,7 @@ function renderAchats(){
         </div>
       </td>
       <td>${p.hasInvoice?badge("📎 "+p.invoiceFile,"bg"):badge("Manquante","br")}</td>
-      <td style="display:flex;gap:4px">
-        <button class="btn btn-sm btn-ghost" title="Retrait de stock" onclick="openDeductStock('${p.id}')">📦−</button>
-        <button class="btn btn-sm btn-danger" onclick="deletePurchase('${p.id}')">✕</button>
-      </td>
+      <td><button class="btn btn-sm btn-danger" onclick="deletePurchase('${p.id}')">✕</button></td>
     </tr>`;
   }).join("");
 }
@@ -1820,7 +1803,10 @@ function renderStock(){
     <td style="font-weight:700">${stockFilter==="livraison"?fmtEur((s.costLiv||0)*s.qtyLiv):stockFilter==="preparation"?fmtEur((s.costPrep||0)*s.qtyPrep):fmtEur(displayVal)}</td>
     <td>${badge(s.shopifyLinked?"Lié":"Manuel",s.shopifyLinked?"bg":"bx")}</td>
     <td style="color:var(--muted);font-size:12px">${fmtDate(s.lastUpdate)}</td>
-    <td><button class="btn btn-sm btn-secondary" onclick="openAddStock('${s.id}')">Modifier</button></td>
+    <td style="display:flex;gap:6px">
+      <button class="btn btn-sm btn-secondary" onclick="openAddStock('${s.id}')">Modifier</button>
+      <button class="btn btn-sm btn-ghost" title="Retrait de stock" onclick="openDeductStock('${s.id}')">📦−</button>
+    </td>
   </tr>`;}).join("");
 }
 
