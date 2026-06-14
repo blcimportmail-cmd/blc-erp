@@ -2401,7 +2401,7 @@ function _openClientModal(c){
       <div class="field"><label>Email</label><input class="input" type="email" id="cl-email" value="${esc(c?.email)}" placeholder="contact@client.fr"/></div>
       <div class="field"><label>Téléphone</label><input class="input" id="cl-phone" value="${esc(c?.phone)}" placeholder="01 23 45 67 89"/></div>
     </div>
-    <button class="btn btn-primary" style="width:100%" onclick="submitClient(${c?.id||"null"})">${c?"Enregistrer":"Créer le client"}</button>
+    <button class="btn btn-primary" style="width:100%" onclick="submitClient('${c?.id||"null"}')">${c?"Enregistrer":"Créer le client"}</button>
   </div></div>`);
 }
 function openAddClient(){_openClientModal(null);}
