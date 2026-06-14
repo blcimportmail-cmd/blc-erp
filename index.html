@@ -426,6 +426,7 @@ let allUsers = [
   {id:"u4",username:"thibault",display_name:"Thibault", role:"collaborateur", avatar_color:"#8b5cf6"},
 ];
 let todoFilter = "all"; // all | mine | global
+let ventesSearch = ""; // filtre texte produit/client
 let stockFilter = "local"; // local | livraison | preparation | all
 let ventesFilter = "all"; // all | day | week | month
 let rdvFilter = "week"; // day | week | month | all
@@ -1215,14 +1216,48 @@ async function saveSaleCost(id){
 
 function renderVentes(){
   let all=[...sales,...shopify];
+  // Tri
   if(sortVentes==="date_desc")all=all.sort((a,b)=>new Date(b.date)-new Date(a.date));
   else if(sortVentes==="date_asc")all=all.sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const filtered=getVentesFiltered(all);
+  else if(sortVentes==="montant_desc")all=all.sort((a,b)=>b.totalTTC-a.totalTTC);
+  else if(sortVentes==="montant_asc")all=all.sort((a,b)=>a.totalTTC-b.totalTTC);
+  else if(sortVentes==="client_asc")all=all.sort((a,b)=>(a.client||"").localeCompare(b.client||""));
+  let filtered=getVentesFiltered(all);
+  // Filtre texte produit/client
+  if(ventesSearch){
+    const q=normalize(ventesSearch);
+    filtered=filtered.filter(s=>normalize(s.product||"").includes(q)||normalize(s.client||"").includes(q));
+  }
   const totalCA=filtered.reduce((s,v)=>s+v.totalTTC,0);
   const label=ventesFilter==="day"?"Aujourd'hui":ventesFilter==="week"?"Cette semaine":ventesFilter==="month"?"Ce mois":"Tout";
   document.getElementById("ventes-sub").textContent=`${label} · ${filtered.length} vente${filtered.length>1?"s":""} · CA : ${fmtEur(totalCA)}`;
+  // Barre de recherche + tri
+  const sortOpts=[
+    {v:"date_desc",l:"Date ↓"},{v:"date_asc",l:"Date ↑"},
+    {v:"montant_desc",l:"Montant ↓"},{v:"montant_asc",l:"Montant ↑"},
+    {v:"client_asc",l:"Client A→Z"}
+  ];
+  const searchBar=document.getElementById("ventes-search-bar");
+  if(!searchBar){
+    const hdr=document.getElementById("ventes-sub").closest(".page-hdr")||document.getElementById("ventes-sub").parentElement;
+    const bar=document.createElement("div");
+    bar.id="ventes-search-bar";
+    bar.style.cssText="display:flex;gap:10px;align-items:center;padding:12px 0 4px;flex-wrap:wrap";
+    bar.innerHTML=`<input id="ventes-search-input" class="input" placeholder="🔍 Rechercher produit ou client..." style="flex:1;min-width:200px;max-width:340px;padding:8px 12px" oninput="ventesSearch=this.value;renderVentes()"/>
+    <select id="ventes-sort-select" class="input" style="width:160px;padding:8px 10px" onchange="sortVentes=this.value;renderVentes()">
+      ${sortOpts.map(o=>`<option value="${o.v}" ${sortVentes===o.v?"selected":""}>${o.l}</option>`).join("")}
+    </select>`;
+    const tableParent=document.getElementById("ventes-body")?.closest("table")?.parentElement;
+    if(tableParent) tableParent.insertBefore(bar, tableParent.firstChild);
+  } else {
+    // Sync values
+    const inp=document.getElementById("ventes-search-input");
+    if(inp&&document.activeElement!==inp) inp.value=ventesSearch;
+    const sel=document.getElementById("ventes-sort-select");
+    if(sel) sel.value=sortVentes;
+  }
   const arrow=dir=>dir==="date_desc"?"↓":dir==="date_asc"?"↑":"↕";
-  const sortBtn=`<button onclick="toggleSortVentes()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--orange);font-weight:700;padding:0;font-family:'Barlow',sans-serif">${arrow(sortVentes)}</button>`;
+  const sortBtn=`<button onclick="toggleSortVentes()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--orange);font-weight:700;padding:0;font-family:'Barlow',sans-serif">${arrow(sortVentes==="date_desc"?"date_desc":sortVentes==="date_asc"?"date_asc":"date_desc")}</button>`;
   document.getElementById("ventes-date-th").innerHTML=`Date ${sortBtn}`;
   document.getElementById("ventes-body").innerHTML=filtered.length===0
     ?`<tr><td colspan="8" class="empty-state">Aucune vente ${ventesFilter!=="all"?"sur cette période":""}</td></tr>`
@@ -1240,6 +1275,98 @@ function renderVentes(){
 function toggleSortVentes(){sortVentes=sortVentes==="date_desc"?"date_asc":"date_desc";renderVentes();}
 
 // ═══════════════════════════ ACHATS ══════════════════════════════════════════
+function openDeductStock(purchaseId){
+  const p=purchases.find(x=>String(x.id)===String(purchaseId));
+  if(!p)return;
+  const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,product:p.description||p.supplier,qty:p.qty,unitHT:p.unitHT}];
+  const linesHTML=lines.map((l,i)=>{
+    const st=l.linkedStockId?stock.find(s=>String(s.id)===String(l.linkedStockId)):null;
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="font-weight:600;color:var(--navy);margin-bottom:6px">${st?.name||l.product} <span style="color:var(--muted);font-size:12px">(stock actuel : ${st?.qty||0} u.)</span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="font-size:12px;color:var(--muted);min-width:100px">Qté à retirer</label>
+        <input class="input" type="number" min="0" step="1" id="deduct-qty-${i}" value="0" style="width:100px;padding:6px 10px"/>
+      </div>
+    </div>`;
+  }).join("");
+
+  showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">📦 Retrait de stock</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Indiquez la quantité à retirer et le motif</div>
+    ${linesHTML}
+    <div style="margin-top:16px">
+      <label style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px;display:block">Motif</label>
+      <div style="display:flex;gap:10px">
+        <button id="motif-erreur" class="btn btn-secondary" style="flex:1;font-size:12px" onclick="selectMotif('erreur')">❌ Erreur de comptage</button>
+        <button id="motif-perte" class="btn btn-secondary" style="flex:1;font-size:12px" onclick="selectMotif('perte')">💸 Perte</button>
+      </div>
+      <div id="motif-desc" style="font-size:11px;color:var(--muted);margin-top:8px;font-style:italic"></div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-danger" style="flex:1" onclick="confirmDeductStock('${purchaseId}')">✅ Confirmer le retrait</button>
+    </div>
+  </div></div>`);
+}
+
+let _deductMotif="erreur";
+function selectMotif(m){
+  _deductMotif=m;
+  document.getElementById("motif-erreur").style.background=m==="erreur"?"var(--orange-pale)":"";
+  document.getElementById("motif-erreur").style.color=m==="erreur"?"var(--orange)":"";
+  document.getElementById("motif-perte").style.background=m==="perte"?"var(--red-pale,#fef2f2)":"";
+  document.getElementById("motif-perte").style.color=m==="perte"?"var(--red)":"";
+  document.getElementById("motif-desc").textContent=m==="erreur"
+    ?"Le stock sera retiré sans impact sur la comptabilité."
+    :"Le stock sera retiré et enregistré comme une charge (perte).";
+}
+
+async function confirmDeductStock(purchaseId){
+  const p=purchases.find(x=>String(x.id)===String(purchaseId));
+  if(!p)return;
+  const lines=p._lines&&p._lines.length?p._lines:[{linkedStockId:p.linkedStockId,product:p.description||p.supplier,qty:p.qty,unitHT:p.unitHT}];
+  const today=new Date().toISOString().split("T")[0];
+  let totalPerdu=0;
+
+  lines.forEach((l,i)=>{
+    const qtyInput=document.getElementById("deduct-qty-"+i);
+    const qty=parseInt(qtyInput?.value||0);
+    if(!qty||qty<=0)return;
+    const st=l.linkedStockId?stock.find(s=>String(s.id)===String(l.linkedStockId)):null;
+    if(!st)return;
+    const newQty=Math.max(0,(st.qty||0)-qty);
+    stock=stock.map(s=>String(s.id)===String(l.linkedStockId)?{...s,qty:newQty}:s);
+    dbRpc("deduct_stock",{p_stock_id:l.linkedStockId,p_qty:qty,p_date:today});
+    if(st.shopifyVariantId) syncStockToShopify({...st,qty:newQty});
+    if(_deductMotif==="perte") totalPerdu+=qty*(st.unitCostHT||l.unitHT||0);
+  });
+
+  if(_deductMotif==="perte"&&totalPerdu>0){
+    // Enregistrer comme charge
+    const charge={
+      label:`Perte stock — ${p.description||p.supplier}`,
+      amount_ht:parseFloat(totalPerdu.toFixed(2)),
+      date:today,
+      category:"perte",
+      recurrent:false,
+      frequency:null
+    };
+    const res=await dbPost("charges",charge);
+    const newId=res&&res[0]?res[0].id:("tmp-"+Date.now());
+    charges=[...charges,{id:newId,label:charge.label,amountHT:charge.amount_ht,date:charge.date,category:"perte",recurrent:false}];
+    notify(`💸 Perte de ${fmtEur(totalPerdu)} enregistrée en charges`);
+  } else {
+    notify("✅ Stock retiré (erreur de comptage)");
+  }
+
+  closeModal();
+  renderStock();
+  renderAchats();
+}
+
 function renderAchats(){
   const totalHT=purchases.reduce((s,p)=>s+p.amountHT,0);
   document.getElementById("achats-sub").textContent=`${purchases.length} achat${purchases.length>1?"s":""} · Total HT : ${fmtEur(totalHT)}`;
@@ -1271,7 +1398,10 @@ function renderAchats(){
         </div>
       </td>
       <td>${p.hasInvoice?badge("📎 "+p.invoiceFile,"bg"):badge("Manquante","br")}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="deletePurchase('${p.id}')">✕</button></td>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-sm btn-ghost" title="Retrait de stock" onclick="openDeductStock('${p.id}')">📦−</button>
+        <button class="btn btn-sm btn-danger" onclick="deletePurchase('${p.id}')">✕</button>
+      </td>
     </tr>`;
   }).join("");
 }
