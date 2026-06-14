@@ -2391,15 +2391,15 @@ function _openClientModal(c){
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">${c?"Modifier le client":"Nouveau client"}</div><button class="modal-close" onclick="closeModal()">✕</button></div>
     <input type="hidden" id="cl-id" value="${c?.id||""}"/>
-    <div class="field"><label>Nom / Entreprise *</label><input class="input" id="cl-name" value="${c?.name||""}" placeholder="Ex: Boutique Rosa"/></div>
-    <div class="field"><label>Adresse</label><input class="input" id="cl-addr" value="${c?.address||""}" placeholder="12 rue de la Paix, 75001 Paris"/></div>
+    <div class="field"><label>Nom / Entreprise *</label><input class="input" id="cl-name" value="${esc(c?.name)}" placeholder="Ex: Boutique Rosa"/></div>
+    <div class="field"><label>Adresse</label><input class="input" id="cl-addr" value="${esc(c?.address)}" placeholder="12 rue de la Paix, 75001 Paris"/></div>
     <div class="row2">
-      <div class="field"><label>SIRET</label><input class="input" id="cl-siret" value="${c?.siret||""}" placeholder="48291038200014"/></div>
-      <div class="field"><label>N° TVA intracommunautaire</label><input class="input" id="cl-tva" value="${c?.tvaIntra||""}" placeholder="FR00123456789"/></div>
+      <div class="field"><label>SIRET</label><input class="input" id="cl-siret" value="${esc(c?.siret)}" placeholder="48291038200014"/></div>
+      <div class="field"><label>N° TVA intracommunautaire</label><input class="input" id="cl-tva" value="${esc(c?.tvaIntra)}" placeholder="FR00123456789"/></div>
     </div>
     <div class="row2">
-      <div class="field"><label>Email</label><input class="input" type="email" id="cl-email" value="${c?.email||""}" placeholder="contact@client.fr"/></div>
-      <div class="field"><label>Téléphone</label><input class="input" id="cl-phone" value="${c?.phone||""}" placeholder="01 23 45 67 89"/></div>
+      <div class="field"><label>Email</label><input class="input" type="email" id="cl-email" value="${esc(c?.email)}" placeholder="contact@client.fr"/></div>
+      <div class="field"><label>Téléphone</label><input class="input" id="cl-phone" value="${esc(c?.phone)}" placeholder="01 23 45 67 89"/></div>
     </div>
     <button class="btn btn-primary" style="width:100%" onclick="submitClient(${c?.id||"null"})">${c?"Enregistrer":"Créer le client"}</button>
   </div></div>`);
@@ -3267,6 +3267,7 @@ function showConfirm(result){
 }
 
 // ═══════════════════════════ MATCHING FLOU ═══════════════════════════════════
+function esc(str){return (str||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 function normalize(str){
   return (str||"").toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g,"") // supprimer accents
