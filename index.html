@@ -2900,22 +2900,28 @@ async function loadShopifyOrders() {
   try {
     notify("⏳ Chargement des commandes Shopify…");
     // Pagination par tranches de jours pour ne jamais dépasser 250 résultats/requête
+    // Fenêtre large (6 mois) avec chevauchement de 1h aux bornes pour ne rien perdre
     let orders = [];
     const now = new Date();
-    const rangeStart = new Date(now.getFullYear(), now.getMonth()-2, 1); // 3 derniers mois
+    now.setHours(23,59,59,999);
+    const rangeStart = new Date(now.getFullYear(), now.getMonth()-5, 1);
+    rangeStart.setHours(0,0,0,0);
     let cursor = new Date(rangeStart);
     while(cursor <= now){
       const chunkStart = new Date(cursor);
-      const chunkEnd = new Date(cursor); chunkEnd.setDate(chunkEnd.getDate()+6); // tranche de 7 jours
+      const chunkEnd = new Date(cursor);
+      chunkEnd.setDate(chunkEnd.getDate()+9); // tranche de 10 jours, large marge
+      const effectiveEnd = chunkEnd > now ? now : chunkEnd;
       const minStr = chunkStart.toISOString();
-      const maxStr = (chunkEnd > now ? now : chunkEnd).toISOString();
+      const maxStr = effectiveEnd.toISOString();
       const data = await shopifyFetch(`/orders.json?status=any&limit=250&created_at_min=${minStr}&created_at_max=${maxStr}`);
       orders = orders.concat(data.orders || []);
-      cursor.setDate(cursor.getDate()+7);
+      cursor.setDate(cursor.getDate()+10);
     }
     // Dédupliquer par id (chevauchement possible aux bornes)
     const seenIds = new Set();
     orders = orders.filter(o => { if(seenIds.has(o.id)) return false; seenIds.add(o.id); return true; });
+    console.log(`[Shopify] ${orders.length} commandes récupérées (fenêtre: ${rangeStart.toISOString().split("T")[0]} → ${now.toISOString().split("T")[0]})`);
     shopify = orders.map(o => ({
       id: o.id.toString(),
       invoiceNum: "",
