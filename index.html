@@ -3006,7 +3006,11 @@ async function loadShopifyOrders() {
       totalTTC: parseFloat(o.total_price),
       shipping: parseFloat(o.shipping_lines?.reduce((s,l)=>s+parseFloat(l.price||0),0)||0) / 1.2, // HT
       date: o.created_at.split("T")[0],
-      status: o.financial_status === "paid" ? "paid" : o.financial_status === "refunded" ? "refunded" : "pending",
+      status: o.financial_status === "paid" ? "paid"
+            : o.financial_status === "partially_paid" ? "paid"
+            : ["refunded","partially_refunded"].includes(o.financial_status) ? "refunded"
+            : "pending", // pending, voided, authorized, null...
+      financialStatusRaw: o.financial_status,
       source: "shopify",
       trackingNumbers: o.fulfillments?.flatMap(f => f.tracking_numbers || []) || [],
       nbColis: o.fulfillments?.reduce((s, f) => s + (f.tracking_numbers?.length || (f.status !== "pending" ? 1 : 0)), 0) || 0,
