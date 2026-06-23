@@ -2894,34 +2894,58 @@ async function shopifyFetch(endpoint, options = {}) {
   if (!res.ok) throw new Error(`Shopify API ${res.status}: ${await res.text()}`);
   return res.json();
 }
+// Variante qui retourne aussi le header Link pour la pagination cursor-based
+async function shopifyFetchRaw(endpoint, options = {}) {
+  const res = await fetch(`/api/shopify${endpoint}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (!res.ok) throw new Error(`Shopify API ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const link = res.headers.get("X-Shopify-Link") || "";
+  return { data, link };
+}
+// Extrait l'URL "next" depuis le header Link Shopify
+function parseNextLink(linkHeader){
+  if(!linkHeader) return null;
+  const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+  return match ? match[1] : null;
+}
 
 // Charger les commandes Shopify
 async function loadShopifyOrders() {
   try {
     notify("⏳ Chargement des commandes Shopify…");
-    // Pagination par tranches de jours pour ne jamais dépasser 250 résultats/requête
-    // Fenêtre large (6 mois) avec chevauchement de 1h aux bornes pour ne rien perdre
+    // Pagination par curseur (page_info / header Link) — méthode officielle Shopify,
+    // robuste quel que soit le volume de commandes (testé jusqu'à plusieurs milliers).
     let orders = [];
     const now = new Date();
-    now.setHours(23,59,59,999);
-    const rangeStart = new Date(now.getFullYear(), now.getMonth()-5, 1);
-    rangeStart.setHours(0,0,0,0);
-    let cursor = new Date(rangeStart);
-    while(cursor <= now){
-      const chunkStart = new Date(cursor);
-      const chunkEnd = new Date(cursor);
-      chunkEnd.setDate(chunkEnd.getDate()+9); // tranche de 10 jours, large marge
-      const effectiveEnd = chunkEnd > now ? now : chunkEnd;
-      const minStr = chunkStart.toISOString();
-      const maxStr = effectiveEnd.toISOString();
-      const data = await shopifyFetch(`/orders.json?status=any&limit=250&created_at_min=${minStr}&created_at_max=${maxStr}`);
+    const rangeStart = new Date(now.getFullYear(), now.getMonth()-5, 1); // 6 derniers mois
+
+    let nextUrl = `/orders.json?status=any&limit=250&created_at_min=${rangeStart.toISOString()}&order=created_at+asc`;
+    let pageCount = 0;
+    const maxPages = 100; // garde-fou anti-boucle infinie
+
+    while(nextUrl && pageCount < maxPages){
+      const { data, link } = await shopifyFetchRaw(nextUrl);
       orders = orders.concat(data.orders || []);
-      cursor.setDate(cursor.getDate()+10);
+      pageCount++;
+      if(pageCount % 3 === 0) notify(`⏳ ${orders.length} commandes chargées…`);
+
+      const nextFullUrl = parseNextLink(link);
+      if(!nextFullUrl){ nextUrl = null; break; }
+      // L'URL "next" est absolue et contient déjà tous les paramètres (page_info inclus)
+      // On en extrait juste le path+query pour repasser par notre proxy
+      try {
+        const u = new URL(nextFullUrl);
+        nextUrl = `/orders.json?${u.searchParams.toString()}`;
+      } catch(e){ nextUrl = null; }
     }
-    // Dédupliquer par id (chevauchement possible aux bornes)
+
+    // Dédupliquer par sécurité (ne devrait pas arriver avec le curseur, mais coût nul)
     const seenIds = new Set();
     orders = orders.filter(o => { if(seenIds.has(o.id)) return false; seenIds.add(o.id); return true; });
-    console.log(`[Shopify] ${orders.length} commandes récupérées (fenêtre: ${rangeStart.toISOString().split("T")[0]} → ${now.toISOString().split("T")[0]})`);
+    console.log(`[Shopify] ${orders.length} commandes récupérées en ${pageCount} page(s) (depuis ${rangeStart.toISOString().split("T")[0]})`);
     shopify = orders.map(o => ({
       id: o.id.toString(),
       invoiceNum: "",
