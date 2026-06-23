@@ -1844,8 +1844,8 @@ function renderFactures(){
     document.getElementById("inv-body").closest(".tbl-wrap").style.display="none";
     document.getElementById("payouts-wrap").style.display="block";
   }
-  resequenceInvoices();
-  const all=[...sales.map(s=>({...s,type:"manual"})),...shopify.map(s=>({...s,type:"shopify"}))].sort((a,b)=>(a.globalSeq||0)-(b.globalSeq||0));
+  // resequenceInvoices() désactivé — on garde le compteur manuel (cf invoice_counter en base)
+  const all=[...sales.map(s=>({...s,type:"manual"})),...shopify.map(s=>({...s,type:"shopify"}))].sort((a,b)=>new Date(b.date)-new Date(a.date));
   const total=all.filter(i=>i.status!=="refunded").reduce((s,v)=>s+v.totalTTC,0);
   document.getElementById("fac-sub").textContent=`${all.length} facture${all.length>1?"s":""} · Total TTC : ${fmtEur(total)}`;
   document.getElementById("inv-body").innerHTML=all.length===0?`<tr><td colspan="7" class="empty-state">Aucune facture</td></tr>`:all.map(inv=>`<tr>
