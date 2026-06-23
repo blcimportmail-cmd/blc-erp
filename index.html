@@ -2988,6 +2988,15 @@ async function loadShopifyOrders() {
         linked_stock_id: null,
       };
       if(!existing||!existing.length){
+        // ── Attribuer le prochain numéro de facture séquentiel ──
+        globalInvCounter++;
+        o.invoiceNum = `FAC-${String(globalInvCounter).padStart(3,"0")}`;
+        o.globalSeq = globalInvCounter;
+        row.invoice_num = o.invoiceNum;
+        row.global_seq = o.globalSeq;
+        // Persister le compteur en base
+        dbPatch("invoice_counter",{id:1, current_value: globalInvCounter});
+
         // ── Figer le costHT au moment de la vente (PMP actuel) ──
         o.lineItems.forEach(l=>{
           if(l.costHT) return; // déjà figé
