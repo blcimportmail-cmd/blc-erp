@@ -2946,10 +2946,15 @@ async function loadShopifyOrders() {
     const seenIds = new Set();
     orders = orders.filter(o => { if(seenIds.has(o.id)) return false; seenIds.add(o.id); return true; });
     console.log(`[Shopify] ${orders.length} commandes récupérées en ${pageCount} page(s) (depuis ${rangeStart.toISOString().split("T")[0]})`);
-    shopify = orders.map(o => ({
+    // Index des commandes déjà en mémoire (chargées depuis Supabase) pour préserver invoiceNum/globalSeq
+    const existingByOrderId = {};
+    shopify.forEach(ex => { if(ex.shopifyOrderId) existingByOrderId[String(ex.shopifyOrderId)] = ex; });
+    shopify = orders.map(o => {
+      const prev = existingByOrderId[String(o.id)];
+      return {
       id: o.id.toString(),
-      invoiceNum: "",
-      globalSeq: 0,
+      invoiceNum: prev?.invoiceNum || "",
+      globalSeq: prev?.globalSeq || 0,
       client: `${o.billing_address?.first_name || o.customer?.first_name || ""} ${o.billing_address?.last_name || o.customer?.last_name || ""}`.trim() || o.email || "Client Shopify",
       clientEmail: o.email,
       clientPhone: o.phone || o.billing_address?.phone || "",
@@ -3016,7 +3021,7 @@ async function loadShopifyOrders() {
       nbColis: o.fulfillments?.reduce((s, f) => s + (f.tracking_numbers?.length || (f.status !== "pending" ? 1 : 0)), 0) || 0,
       shopifyOrderId: o.id,
       shopifyOrderNumber: o.order_number,
-    }));
+    };});
     shopifyConnected = true;
     // Enrichir les lineItems avant de calculer la marge
     enrichLineItems();
