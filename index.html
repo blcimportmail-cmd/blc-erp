@@ -451,7 +451,7 @@ let companyInfo = {
 };
 
 // Sort & filter state
-let sortVentes = "date_desc";   // date_desc | date_asc
+let sortVentes = "seq_desc";   // date_desc | date_asc
 let sortAchats = "date_desc";
 let dashFrom   = "";  // YYYY-MM-DD
 let dashTo     = "";  // YYYY-MM-DD
@@ -1224,11 +1224,14 @@ async function saveSaleCost(id){
 function renderVentes(){
   let all=[...sales,...shopify];
   // Tri
-  if(sortVentes==="date_desc")all=all.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(sortVentes==="seq_desc")all=all.sort((a,b)=>(b.globalSeq||0)-(a.globalSeq||0));
+  else if(sortVentes==="seq_asc")all=all.sort((a,b)=>(a.globalSeq||0)-(b.globalSeq||0));
+  else if(sortVentes==="date_desc")all=all.sort((a,b)=>new Date(b.date)-new Date(a.date));
   else if(sortVentes==="date_asc")all=all.sort((a,b)=>new Date(a.date)-new Date(b.date));
   else if(sortVentes==="montant_desc")all=all.sort((a,b)=>b.totalTTC-a.totalTTC);
   else if(sortVentes==="montant_asc")all=all.sort((a,b)=>a.totalTTC-b.totalTTC);
   else if(sortVentes==="client_asc")all=all.sort((a,b)=>(a.client||"").localeCompare(b.client||""));
+  else all=all.sort((a,b)=>(b.globalSeq||0)-(a.globalSeq||0)); // défaut
   let filtered=getVentesFiltered(all);
   // Filtre texte produit/client
   if(ventesSearch){
@@ -1240,6 +1243,7 @@ function renderVentes(){
   document.getElementById("ventes-sub").textContent=`${label} · ${filtered.length} vente${filtered.length>1?"s":""} · CA : ${fmtEur(totalCA)}`;
   // Barre de recherche + tri
   const sortOpts=[
+    {v:"seq_desc",l:"N° facture ↓ (récent)"},{v:"seq_asc",l:"N° facture ↑ (ancien)"},
     {v:"date_desc",l:"Date ↓"},{v:"date_asc",l:"Date ↑"},
     {v:"montant_desc",l:"Montant ↓"},{v:"montant_asc",l:"Montant ↑"},
     {v:"client_asc",l:"Client A→Z"}
