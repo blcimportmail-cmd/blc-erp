@@ -1856,7 +1856,7 @@ function renderFactures(){
   const total=all.filter(i=>i.status!=="refunded").reduce((s,v)=>s+v.totalTTC,0);
   document.getElementById("fac-sub").textContent=`${all.length} facture${all.length>1?"s":""} · Total TTC : ${fmtEur(total)}`;
   document.getElementById("inv-body").innerHTML=all.length===0?`<tr><td colspan="7" class="empty-state">Aucune facture</td></tr>`:all.map(inv=>`<tr>
-    <td style="font-weight:700;color:var(--orange);font-family:monospace;font-size:13px">${inv.invoiceNum||(inv.shopifyOrderId?"CMD-"+inv.shopifyOrderId:"—")}</td>
+    <td style="font-weight:700;color:var(--orange);font-family:monospace;font-size:13px">${inv.invoiceNum||"—"}</td>
     <td style="font-weight:600">${inv.client}</td>
     <td style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inv.product}</td>
     <td style="font-weight:700;color:var(--green)">${fmtEur(inv.totalTTC)}</td>
