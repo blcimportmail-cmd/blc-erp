@@ -2899,8 +2899,23 @@ async function shopifyFetch(endpoint, options = {}) {
 async function loadShopifyOrders() {
   try {
     notify("⏳ Chargement des commandes Shopify…");
-    const data = await shopifyFetch("/orders.json?status=any&limit=250");
-    const orders = data.orders || [];
+    // Pagination par tranches de jours pour ne jamais dépasser 250 résultats/requête
+    let orders = [];
+    const now = new Date();
+    const rangeStart = new Date(now.getFullYear(), now.getMonth()-2, 1); // 3 derniers mois
+    let cursor = new Date(rangeStart);
+    while(cursor <= now){
+      const chunkStart = new Date(cursor);
+      const chunkEnd = new Date(cursor); chunkEnd.setDate(chunkEnd.getDate()+6); // tranche de 7 jours
+      const minStr = chunkStart.toISOString();
+      const maxStr = (chunkEnd > now ? now : chunkEnd).toISOString();
+      const data = await shopifyFetch(`/orders.json?status=any&limit=250&created_at_min=${minStr}&created_at_max=${maxStr}`);
+      orders = orders.concat(data.orders || []);
+      cursor.setDate(cursor.getDate()+7);
+    }
+    // Dédupliquer par id (chevauchement possible aux bornes)
+    const seenIds = new Set();
+    orders = orders.filter(o => { if(seenIds.has(o.id)) return false; seenIds.add(o.id); return true; });
     shopify = orders.map(o => ({
       id: o.id.toString(),
       invoiceNum: "",
