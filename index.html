@@ -880,7 +880,14 @@ function renderDashboard(){
   const days=dashFrom&&dashTo?Math.ceil((new Date(dashTo)-new Date(dashFrom))/864e5)+1:7;
   const barCount=Math.min(days,14);
   const barDates=[];
-  if(dashFrom){for(let i=0;i<barCount;i++){const d=new Date(dashFrom);d.setDate(d.getDate()+Math.floor(i*(days/barCount)));barDates.push(isoDate(d));}}
+  if(dashFrom){
+    for(let i=0;i<barCount;i++){
+      // Répartition garantissant que le dernier point = dashTo (jour exact)
+      const offset=barCount>1?Math.round(i*(days-1)/(barCount-1)):0;
+      const d=new Date(dashFrom);d.setDate(d.getDate()+offset);
+      barDates.push(isoDate(d));
+    }
+  }
   else{for(let i=barCount-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);barDates.push(isoDate(d));}}
   const barVals=barDates.map(ds=>allSales.filter(s=>s.date===ds).reduce((s,v)=>s+v.totalTTC,0));
   const maxB=Math.max(...barVals,1);
