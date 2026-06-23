@@ -892,7 +892,7 @@ function renderDashboard(){
   const barVals=barDates.map(ds=>allSales.filter(s=>s.date===ds).reduce((s,v)=>s+v.totalTTC,0));
   const maxB=Math.max(...barVals,1);
   document.getElementById("spark-title").textContent=`CA — ${periodLabel}`;
-  document.getElementById("spark-period-label").textContent=fmtEur(barVals.reduce((a,b)=>a+b,0));
+  document.getElementById("spark-period-label").textContent=fmtEur(totalCA);
   // Courbe SVG
   const svg=document.getElementById("spark-svg");
   if(svg){
