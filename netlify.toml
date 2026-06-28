@@ -27,3 +27,9 @@
   from = "/api/claude"
   to = "/.netlify/functions/claude-proxy"
   status = 200
+
+  # Ajouter ce bloc dans netlify.toml (à côté des autres redirects /api/...)
+[[redirects]]
+  from = "/api/calendly/*"
+  to = "/.netlify/functions/calendly-proxy/:splat"
+  status = 200
