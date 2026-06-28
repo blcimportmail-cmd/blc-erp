@@ -1955,10 +1955,11 @@ function deleteInvoice(id){
 
 // ═══════════════════════════ INVOICE BUILDER ══════════════════════════════════
 
-function buildInvoiceHTML(invoiceNum,clientObj,lines,date,shipping){
+function buildInvoiceHTML(invoiceNum,clientObj,lines,date,shipping,discountHT,discountReason){
   const ci=companyInfo;
   const prodHT=lines.reduce((s,l)=>s+l.totalHT,0);
-  const totalHT=prodHT+(shipping||0);
+  const disc=discountHT||0;
+  const totalHT=Math.max(0,prodHT-disc)+(shipping||0);
   const tva20=totalHT*0.2,ttc=totalHT*1.2;
   const clientName=clientObj?.name||"";
   const clientAddr=[clientObj?.address,clientObj?.zipCity||clientObj?.zip_city].filter(Boolean).join(", ");
@@ -2010,6 +2011,7 @@ tbody tr{border-bottom:1px solid #f0f2f8}tbody tr:last-child{border-bottom:none}
 <div class="tbl-wrap"><table><thead><tr><th style="width:45%">Désignation</th><th style="width:15%">Quantité</th><th style="width:20%">Prix unit. HT</th><th style="width:20%">Total HT</th></tr></thead><tbody>${linesHTML}</tbody></table></div>
 <div class="totals"><div class="ti">
   <div class="tr"><span>Sous-total produits HT</span><span>${fmtEur(prodHT)}</span></div>
+  ${disc>0?`<div class="tr" style="color:#c45e0a"><span>Remise${discountReason?" — "+discountReason:""}</span><span style="color:#c45e0a">-${fmtEur(disc)}</span></div>`:""}
   ${(shipping||0)>0?`<div class="tr"><span>Frais de port HT</span><span>${fmtEur(shipping||0)}</span></div>`:""}
   <div class="tr" style="border-top:1px solid #e8eaf0"><span>Total HT</span><span style="font-weight:700">${fmtEur(totalHT)}</span></div>
   <div class="tr"><span>TVA 20%</span><span>${fmtEur(tva20)}</span></div>
@@ -2021,9 +2023,9 @@ ${(ci.iban||ci.paymentTerms)?`<div class="payment"><div class="pt">Informations 
 }
 
 // Generate PDF from invoice HTML using jsPDF + html2canvas
-async function generatePDF(invoiceNum, clientObj, lines, date, shipping) {
+async function generatePDF(invoiceNum, clientObj, lines, date, shipping, discountHT, discountReason) {
   // Create hidden iframe to render the invoice
-  const html = buildInvoiceHTML(invoiceNum, clientObj, lines, date, shipping);
+  const html = buildInvoiceHTML(invoiceNum, clientObj, lines, date, shipping, discountHT, discountReason);
   const iframe = document.createElement("iframe");
   iframe.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:900px;height:1200px;border:none;";
   document.body.appendChild(iframe);
@@ -2085,7 +2087,7 @@ async function dlInvoice(id) {
   }
   notify("⏳ Génération du PDF…");
   const invoiceNum = s.invoiceNum || `CMD-${s.shopifyOrderId||id}`;
-  const pdf = await generatePDF(invoiceNum, clientObj, lines, s.date, shipping);
+  const pdf = await generatePDF(invoiceNum, clientObj, lines, s.date, shipping, s.discountHT||0, s.discountReason||"");
   if(pdf) {
     pdf.save(`${invoiceNum}-${s.client.replace(/\s/g,"_")}.pdf`);
     notify(`🧾 ${invoiceNum} téléchargée en PDF`);
@@ -2176,6 +2178,18 @@ function openAddSale(){
       <div class="field"><label>Livraison HT (€)</label><input class="input" type="number" id="f-ship" value="0" step="0.01" oninput="calcSaleTotal()"/></div>
       <div class="field"><label>Date</label><input class="input" type="date" id="f-date" value="${new Date().toISOString().split("T")[0]}"/></div>
     </div>
+    <div class="row2">
+      <div class="field"><label>Remise</label>
+        <div style="display:flex;gap:6px">
+          <input class="input" type="number" id="f-discount" value="0" min="0" step="0.01" oninput="calcSaleTotal()" style="flex:1"/>
+          <select class="input" id="f-discount-type" onchange="calcSaleTotal()" style="width:90px">
+            <option value="percent">%</option>
+            <option value="amount">€ HT</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Motif remise (optionnel)</label><input class="input" id="f-discount-reason" placeholder="Ex: Client fidèle"/></div>
+    </div>
     <div id="sale-total-prev" style="display:none;background:var(--orange-pale);border-radius:9px;padding:11px 13px;margin-bottom:13px;font-size:13px;color:#c45e0a"></div>
     <button class="btn btn-primary" style="width:100%" onclick="submitSale()">Enregistrer la vente</button>
   </div></div>`);
@@ -2234,9 +2248,17 @@ function calcSaleTotal(){
     ht+=(parseFloat(document.getElementById(`sl-q-${id}`)?.value||0))*(parseFloat(document.getElementById(`sl-u-${id}`)?.value||0));
   });
   const ship=parseFloat(document.getElementById("f-ship")?.value||0);
+  const discountVal=parseFloat(document.getElementById("f-discount")?.value||0);
+  const discountType=document.getElementById("f-discount-type")?.value||"percent";
+  const discountHT=discountType==="percent"?ht*(discountVal/100):discountVal;
+  const htAfterDiscount=Math.max(0,ht-discountHT);
   const prev=document.getElementById("sale-total-prev");if(!prev)return;
-  if(ht>0){prev.style.display="block";prev.innerHTML=`<b>Total TTC estimé :</b> ${fmtEur((ht+ship)*1.2)}`;}
-  else prev.style.display="none";
+  if(ht>0){
+    prev.style.display="block";
+    prev.innerHTML=discountHT>0
+      ?`Sous-total HT : ${fmtEur(ht)} · Remise : -${fmtEur(discountHT)}<br/><b>Total TTC estimé :</b> ${fmtEur((htAfterDiscount+ship)*1.2)}`
+      :`<b>Total TTC estimé :</b> ${fmtEur((ht+ship)*1.2)}`;
+  } else prev.style.display="none";
 }
 
 function submitSale(){
@@ -2281,7 +2303,12 @@ function submitSale(){
 
   const ship=parseFloat(document.getElementById("f-ship")?.value||0);
   const date=document.getElementById("f-date").value;
-  const totalHT=lines.reduce((s,l)=>s+l.totalHT,0)+ship;
+  const discountVal=parseFloat(document.getElementById("f-discount")?.value||0);
+  const discountType=document.getElementById("f-discount-type")?.value||"percent";
+  const discountReason=document.getElementById("f-discount-reason")?.value.trim()||"";
+  const prodHT=lines.reduce((s,l)=>s+l.totalHT,0);
+  const discountHT=discountType==="percent"?parseFloat((prodHT*(discountVal/100)).toFixed(2)):discountVal;
+  const totalHT=Math.max(0,prodHT-discountHT)+ship;
   const ttc=parseFloat((totalHT*1.2).toFixed(2));
   const num=nextFAC();
   const productSummary=lines.map(l=>`${l.qty}x ${l.product}`).join(", ");
@@ -2294,7 +2321,11 @@ function submitSale(){
     qty:lines.reduce((s,l)=>s+l.qty,0),
     unitHT:lines[0]?.unitHT||0,
     linkedStockId:lines[0]?.linkedStockId||null,
-    shipping:ship,totalTTC:ttc,date,source:"manual"
+    shipping:ship,totalTTC:ttc,date,source:"manual",
+    discountValue:discountVal>0?discountVal:0,
+    discountType,
+    discountHT:discountHT>0?discountHT:0,
+    discountReason
   };
   sales=[ns,...sales];
 
@@ -2339,7 +2370,7 @@ function submitSale(){
 
   if(clientObj)clients=clients.map(c=>String(c.id)===String(clientObj.id)?{...c,totalPurchases:(c.totalPurchases||0)+ttc}:c);
   // Save to Supabase
-  const saleRow={invoice_num:ns.invoiceNum,global_seq:ns.globalSeq,client_id:ns.clientId||null,client_name:ns.client,product:ns.product,lines:ns._lines||[],qty:ns.qty,unit_ht:ns.unitHT,shipping:ns.shipping||0,total_ttc:ns.totalTTC,date:ns.date,source:"manual",linked_stock_id:ns.linkedStockId||null};
+  const saleRow={invoice_num:ns.invoiceNum,global_seq:ns.globalSeq,client_id:ns.clientId||null,client_name:ns.client,product:ns.product,lines:ns._lines||[],qty:ns.qty,unit_ht:ns.unitHT,shipping:ns.shipping||0,total_ttc:ns.totalTTC,date:ns.date,source:"manual",linked_stock_id:ns.linkedStockId||null,discount_value:ns.discountValue||0,discount_type:ns.discountType||"percent",discount_ht:ns.discountHT||0,discount_reason:ns.discountReason||""};
   dbPost("sales",saleRow).then(r=>{if(r&&r[0])ns.id=r[0].id;});
   lines.forEach(l=>{if(l.linkedStockId){const s=stock.find(x=>String(x.id)===String(l.linkedStockId));if(s)dbPatch("stock",{id:s.id,qty:s.qty,unit_cost_ht:s.unitCostHT,last_update:ns.date,name:s.name,reserved:s.reserved||0,shopify_linked:s.shopifyLinked||false});}});
   if(clientObj){const cl=clients.find(c=>String(c.id)===String(clientObj.id));if(cl)dbPatch("clients",{id:cl.id,total_purchases:cl.totalPurchases});}
@@ -4055,7 +4086,7 @@ async function dbDelete(table, id) {
 // Convert Supabase row → local format
 function rowToClient(r){return {id:r.id,name:r.name,address:r.address||"",zipCity:r.zip_city||"",siret:r.siret||"",tvaIntra:r.tva_intra||"",email:r.email||"",phone:r.phone||"",totalPurchases:parseFloat(r.total_purchases||0)};}
 function rowToStock(r){return {id:r.id,name:r.name,qty:r.qty||0,reserved:r.reserved||0,unitCostHT:parseFloat(r.unit_cost_ht||0),shopifyLinked:r.shopify_linked||false,shopifyProductId:r.shopify_product_id,shopifyVariantId:r.shopify_variant_id,shopifyMultiplier:r.shopify_multiplier||1,shopifyName:r.shopify_name||'',lastUpdate:r.last_update};}
-function rowToSale(r){const _l=(r.lines&&typeof r.lines==="string")?JSON.parse(r.lines):(r.lines||[]);return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:_l,lineItems:_l,qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id,shopifyOrderId:r.shopify_order_id};}
+function rowToSale(r){const _l=(r.lines&&typeof r.lines==="string")?JSON.parse(r.lines):(r.lines||[]);return {id:r.id,invoiceNum:r.invoice_num,globalSeq:r.global_seq,client:r.client_name,clientId:r.client_id,product:r.product,_lines:_l,lineItems:_l,qty:r.qty,unitHT:parseFloat(r.unit_ht||0),shipping:parseFloat(r.shipping||0),totalTTC:parseFloat(r.total_ttc||0),date:r.date,source:r.source||"manual",linkedStockId:r.linked_stock_id,shopifyOrderId:r.shopify_order_id,discountValue:parseFloat(r.discount_value||0),discountType:r.discount_type||"percent",discountHT:parseFloat(r.discount_ht||0),discountReason:r.discount_reason||""};}
 function rowToPurchase(r){return {id:r.id,supplier:r.supplier_name,supplierId:r.supplier_id,description:r.description,_lines:r.lines||[],qty:r.qty,unitHT:parseFloat(r.unit_ht||0),amountHT:parseFloat(r.amount_ht||0),date:r.date,hasInvoice:r.has_invoice,invoiceFile:r.invoice_file,stockStatus:r.stock_status,linkedStockId:r.linked_stock_id};}
 function rowToCharge(r){return {id:r.id,name:r.name,type:r.type,category:r.category,amountHT:parseFloat(r.amount_ht||0),period:r.period,note:r.note,active:r.active!==false};}
 function rowToTodo(r){return {id:r.id,title:r.title,description:r.description,assigned_to:r.assigned_to,created_by:r.created_by,due_date:r.due_date,priority:r.priority||"normal",status:r.status||"todo",is_global:r.is_global,created_at:r.created_at};}
