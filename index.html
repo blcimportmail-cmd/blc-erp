@@ -3075,7 +3075,7 @@ async function loadShopifyOrders() {
     // Save Shopify orders to Supabase (upsert by shopify_order_id)
     for(const o of shopify){
       // Check if already exists
-      const existing = await dbGet("sales", `shopify_order_id=eq.${o.shopifyOrderId}&select=id`);
+      const existing = await dbGet("sales", `shopify_order_id=eq.${o.shopifyOrderId}&select=id,invoice_num,global_seq`);
       const row = {
         invoice_num: o.invoiceNum||"",
         global_seq: o.globalSeq||0,
@@ -3133,9 +3133,24 @@ async function loadShopifyOrders() {
           });
         }
       } else {
-        // ── Commande existante : figer costHT si manquant ──
-        const needsUpdate = o.lineItems.some(l=>!l.costHT);
-        if(needsUpdate){
+        // ── Commande existante : récupérer le invoice_num déjà en base s'il existe ──
+        const existingRow = existing[0];
+        let needsInvoiceNumPatch = false;
+        if(existingRow?.invoice_num){
+          o.invoiceNum = existingRow.invoice_num;
+          o.globalSeq = existingRow.global_seq||0;
+        } else if(!o.invoiceNum){
+          // Commande ancienne sans numéro (créée avant le système de numérotation) :
+          // on lui attribue rétroactivement le prochain numéro disponible.
+          globalInvCounter++;
+          o.invoiceNum = `FAC-${String(globalInvCounter).padStart(3,"0")}`;
+          o.globalSeq = globalInvCounter;
+          needsInvoiceNumPatch = true;
+        }
+
+        // ── Figer costHT si manquant ──
+        const needsCostUpdate = o.lineItems.some(l=>!l.costHT);
+        if(needsCostUpdate){
           o.lineItems.forEach(l=>{
             if(l.costHT) return;
             let stockItem=l.linkedStockId?stock.find(s=>String(s.id)===String(l.linkedStockId)):null;
@@ -3143,14 +3158,15 @@ async function loadShopifyOrders() {
             if(!stockItem) return;
             const mult=stockItem.shopifyMultiplier||1;
             const lots=l.shopifyLots||1;
-            // Pour les ventes passées : utiliser le PMP actuel comme meilleure approximation
-            // SAUF si le PMP a changé récemment (on ne peut pas le savoir)
-            // → on ne fige QUE si costHT est absent, pour ne pas écraser les corrections manuelles
             l.costHT=parseFloat((lots*mult*(stockItem.unitCostHT||0)).toFixed(4));
           });
-          // Sauvegarder en Supabase via shopify_order_id
-          const supaId=existing[0]?.id;
-          if(supaId) dbPatch("sales",{id:supaId, lines:o.lineItems});
+        }
+
+        if(needsCostUpdate||needsInvoiceNumPatch){
+          const supaId=existingRow?.id;
+          const patchBody={id:supaId, lines:o.lineItems};
+          if(needsInvoiceNumPatch){ patchBody.invoice_num=o.invoiceNum; patchBody.global_seq=o.globalSeq; }
+          if(supaId) await dbPatch("sales",patchBody);
         }
       }
     }
