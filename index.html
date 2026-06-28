@@ -4399,13 +4399,18 @@ function getRdvFiltered(){
   if(rdvFilter==="day"){from=today;to=today;}
   else if(rdvFilter==="week"){
     const d=new Date(now);const day=d.getDay()||7;d.setDate(d.getDate()-day+1);
-    from=isoDate(d);
+    const weekStart=isoDate(d);
+    // Par défaut on n'affiche que les RDV à venir : on part d'aujourd'hui, pas du lundi,
+    // tout en gardant le libellé "Semaine du lundi au dimanche" pour le contexte.
+    from = weekStart>today ? weekStart : today;
     const d2=new Date(d);d2.setDate(d2.getDate()+6);to=isoDate(d2);
   }
   else if(rdvFilter==="month"){
-    from=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`;
+    const monthStart=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`;
+    from = monthStart>today ? monthStart : today;
     const lastDay=new Date(now.getFullYear(),now.getMonth()+1,0);to=isoDate(lastDay);
   }
+  // rdvFilter==="all" garde tout l'historique (from/to vides) — voulu
   let filtered=rdvList;
   if(from)filtered=filtered.filter(r=>r.date>=from);
   if(to)filtered=filtered.filter(r=>r.date<=to);
