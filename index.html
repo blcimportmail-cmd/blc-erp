@@ -4594,6 +4594,106 @@ function deleteRdv(id){
   renderRdv();notify("🗑 RDV supprimé");
 }
 
+// ═══════════════════════════ CALENDLY SYNC ════════════════════════════════════
+async function calendlyFetch(endpoint, options = {}) {
+  const res = await fetch(`/api/calendly${endpoint}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (!res.ok) throw new Error(`Calendly API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+let calendlyUserUri = null;
+
+async function loadCalendlyEvents(){
+  try{
+    notify("⏳ Chargement des rendez-vous Calendly…");
+
+    // 1. Récupérer l'URI utilisateur si pas encore en cache
+    if(!calendlyUserUri){
+      const me = await calendlyFetch("/users/me");
+      calendlyUserUri = me.resource.uri;
+    }
+
+    // 2. Récupérer les événements programmés (passés 7j + futurs 60j)
+    const now = new Date();
+    const minTime = new Date(now); minTime.setDate(minTime.getDate()-7);
+    const maxTime = new Date(now); maxTime.setDate(maxTime.getDate()+60);
+
+    let allEvents = [];
+    let pageToken = null;
+    let safety = 0;
+    do{
+      const params = new URLSearchParams({
+        user: calendlyUserUri,
+        min_start_time: minTime.toISOString(),
+        max_start_time: maxTime.toISOString(),
+        count: "100",
+        sort: "start_time:asc",
+      });
+      if(pageToken) params.set("page_token", pageToken);
+      const data = await calendlyFetch(`/scheduled_events?${params.toString()}`);
+      allEvents = allEvents.concat(data.collection || []);
+      pageToken = data.pagination?.next_page_token || null;
+      safety++;
+    } while(pageToken && safety < 20);
+
+    // 3. Pour chaque événement, récupérer l'invité (nom du client) si disponible
+    const newRdvs = [];
+    for(const ev of allEvents){
+      if(ev.status === "canceled") continue; // on ignore les annulés
+      const evId = ev.uri.split("/").pop();
+      let clientName = "";
+      try{
+        const invitees = await calendlyFetch(`/scheduled_events/${evId}/invitees`);
+        const inv = invitees.collection?.[0];
+        clientName = inv?.name || inv?.email || "";
+      }catch(e){ /* pas grave si ça échoue */ }
+
+      const start = new Date(ev.start_time);
+      const end = new Date(ev.end_time);
+      newRdvs.push({
+        id: "calendly-"+evId,
+        title: ev.name || "Rendez-vous Calendly",
+        date: isoDate(start),
+        time: `${String(start.getHours()).padStart(2,"0")}:${String(start.getMinutes()).padStart(2,"0")}`,
+        endTime: `${String(end.getHours()).padStart(2,"0")}:${String(end.getMinutes()).padStart(2,"0")}`,
+        clientName,
+        notes: ev.location?.join_url || ev.location?.location || "",
+        source: "calendly",
+        calendlyEventId: evId,
+      });
+    }
+
+    // 4. Fusionner : remplacer les anciens calendly-* par les nouveaux, garder le reste
+    const existingIds = new Set(newRdvs.map(r=>r.id));
+    rdvList = rdvList.filter(r => r.source !== "calendly" || existingIds.has(r.id));
+
+    for(const r of newRdvs){
+      const idx = rdvList.findIndex(x => x.id === r.id);
+      if(idx >= 0){
+        rdvList[idx] = {...rdvList[idx], ...r};
+      } else {
+        rdvList.push(r);
+        // Sauvegarder en base si nouveau
+        const row = {
+          title: r.title, date: r.date, time: r.time, end_time: r.endTime,
+          client_name: r.clientName, notes: r.notes, source: "calendly",
+          calendly_event_id: r.calendlyEventId,
+        };
+        dbPost("rdv", row).then(res=>{ if(res&&res[0]) r.id = res[0].id; });
+      }
+    }
+
+    renderRdv();
+    notify(`✅ ${newRdvs.length} rendez-vous Calendly synchronisés`);
+  }catch(err){
+    notify("❌ Erreur Calendly : " + err.message);
+    console.error(err);
+  }
+}
+
 function openCalendarSync(){
   showModal(`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
     <div class="modal-hdr"><div class="modal-title">🔗 Synchronisation Calendrier</div><button class="modal-close" onclick="closeModal()">✕</button></div>
@@ -4606,7 +4706,7 @@ function openCalendarSync(){
       <div style="background:var(--green-pale);border-radius:10px;padding:16px;border:1.5px solid #bbf7d0">
         <div style="font-weight:700;color:var(--green);margin-bottom:6px">🟢 Calendly</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Importe tes rendez-vous Calendly automatiquement.</div>
-        <button class="btn btn-secondary" style="width:100%" onclick="notify('🔜 Connexion Calendly — bientôt disponible')">Connecter Calendly</button>
+        <button class="btn btn-secondary" style="width:100%" onclick="closeModal();loadCalendlyEvents()">🔄 Synchroniser Calendly</button>
       </div>
       <div style="background:#f7f8fc;border-radius:10px;padding:16px;border:1.5px solid var(--border)">
         <div style="font-weight:700;color:var(--navy);margin-bottom:6px">📥 Import manuel (.ics)</div>
