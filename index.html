@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box} 
+*{margin:0;padding:0;box-sizing:border-box}
 :root{
   --navy:#0F1535;--orange:#F47920;--orange-pale:#fff4ec;
   --bg:#f2f3f7;--card:#ffffff;--border:#e4e6ef;
@@ -456,6 +456,10 @@ let availability = {
   samedi:   {enabled:false, slots:[]},
   dimanche: {enabled:false, slots:[]}
 };
+// Surcharges ponctuelles par date exacte (ex: "2026-07-14": {enabled:false, slots:[]})
+// Si une date a une entrée ici, elle prime sur le modèle récurrent par défaut.
+let availabilityOverrides = {};
+let currentAvailWeekStart = null; // ISO date du lundi de la semaine affichée
 let ventesSearch = ""; // filtre texte produit/client
 let stockFilter = "local"; // local | livraison | preparation | all
 let ventesFilter = "all"; // all | day | week | month
@@ -4099,6 +4103,9 @@ async function loadAllData(){
       if(ci.availability){
         try{ availability = typeof ci.availability==="string" ? JSON.parse(ci.availability) : ci.availability; }catch(e){}
       }
+      if(ci.availability_overrides){
+        try{ availabilityOverrides = typeof ci.availability_overrides==="string" ? JSON.parse(ci.availability_overrides) : ci.availability_overrides; }catch(e){}
+      }
     }
     // Sync invoice counter
     const ctr = await dbGet("invoice_counter","id=eq.1");
@@ -4419,58 +4426,127 @@ function switchRdvTab(tab){
   if(tab==="availability") renderAvailability();
 }
 
-function renderAvailability(){
-  const days=[
-    {key:"lundi",label:"Lundi"},{key:"mardi",label:"Mardi"},{key:"mercredi",label:"Mercredi"},
-    {key:"jeudi",label:"Jeudi"},{key:"vendredi",label:"Vendredi"},{key:"samedi",label:"Samedi"},{key:"dimanche",label:"Dimanche"}
-  ];
-  document.getElementById("availability-grid").innerHTML=days.map(d=>{
-    const day=availability[d.key]||{enabled:false,slots:[]};
-    const slotsHTML=(day.slots||[]).map((s,i)=>`
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px" data-slot="${d.key}-${i}">
-        <input class="input" type="time" value="${s.start}" style="width:110px;padding:6px 10px" onchange="updateSlot('${d.key}',${i},'start',this.value)"/>
-        <span style="color:var(--muted);font-size:12px">à</span>
-        <input class="input" type="time" value="${s.end}" style="width:110px;padding:6px 10px" onchange="updateSlot('${d.key}',${i},'end',this.value)"/>
-        <button class="btn btn-sm btn-ghost" onclick="removeSlot('${d.key}',${i})" style="padding:4px 8px">✕</button>
-      </div>`).join("");
-    return `
-    <div style="display:flex;align-items:flex-start;gap:16px;padding:14px 0;border-bottom:1px solid var(--border)">
-      <div style="min-width:130px;padding-top:6px">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" ${day.enabled?"checked":""} onchange="toggleDay('${d.key}',this.checked)" style="width:16px;height:16px;cursor:pointer"/>
-          <span style="font-weight:700;color:var(--navy);font-size:14px">${d.label}</span>
-        </label>
-      </div>
-      <div style="flex:1;${day.enabled?"":"opacity:0.4;pointer-events:none"}">
-        ${slotsHTML||'<div style="font-size:12px;color:var(--muted);font-style:italic">Aucun créneau</div>'}
-        <button class="btn btn-sm btn-ghost" onclick="addSlot('${d.key}')" style="margin-top:4px;font-size:12px">+ Ajouter un créneau</button>
-      </div>
-    </div>`;
-  }).join("");
+const DAY_KEYS=["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
+const DAY_LABELS={lundi:"Lundi",mardi:"Mardi",mercredi:"Mercredi",jeudi:"Jeudi",vendredi:"Vendredi",samedi:"Samedi",dimanche:"Dimanche"};
+
+function getMondayOf(d){
+  const dt=new Date(d);
+  const day=dt.getDay(); // 0=dim,1=lun...
+  const diff=day===0?-6:1-day;
+  dt.setDate(dt.getDate()+diff);
+  dt.setHours(0,0,0,0);
+  return dt;
 }
 
-function toggleDay(day,checked){
-  availability[day].enabled=checked;
-  if(checked&&(!availability[day].slots||!availability[day].slots.length)){
-    availability[day].slots=[{start:"09:00",end:"18:00"}];
+function renderAvailability(){
+  if(!currentAvailWeekStart) currentAvailWeekStart=isoDate(getMondayOf(new Date()));
+  const monday=new Date(currentAvailWeekStart);
+  const weekDates=DAY_KEYS.map((k,i)=>{const d=new Date(monday);d.setDate(d.getDate()+i);return {key:k,date:isoDate(d),label:DAY_LABELS[k],dateObj:d};});
+  const sunday=weekDates[6].dateObj;
+  const todayIso=isoDate(new Date());
+
+  const header=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;background:var(--navy);border-radius:12px;padding:14px 18px">
+      <button class="btn btn-sm" style="background:rgba(255,255,255,0.12);color:#fff;border:none" onclick="shiftAvailWeek(-1)">← Semaine préc.</button>
+      <div style="text-align:center">
+        <div style="color:#fff;font-weight:800;font-size:15px">Semaine du ${fmtDate(weekDates[0].date)} au ${fmtDate(weekDates[6].date)}</div>
+        <button class="btn btn-sm" style="background:transparent;color:var(--orange);border:none;font-size:11px;padding:2px;margin-top:2px;text-decoration:underline" onclick="goToTodayAvailWeek()">Revenir à cette semaine</button>
+      </div>
+      <button class="btn btn-sm" style="background:rgba(255,255,255,0.12);color:#fff;border:none" onclick="shiftAvailWeek(1)">Semaine suiv. →</button>
+    </div>`;
+
+  const cards=weekDates.map(wd=>{
+    const override=availabilityOverrides[wd.date];
+    const base=availability[wd.key]||{enabled:false,slots:[]};
+    const effective=override||base;
+    const isOverridden=!!override;
+    const isToday=wd.date===todayIso;
+    const isPast=wd.date<todayIso;
+
+    const slotsHTML=(effective.slots||[]).map((s,i)=>`
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <input class="input" type="time" value="${s.start}" style="width:100px;padding:5px 8px;font-size:13px" onchange="updateDaySlot('${wd.date}','${wd.key}',${i},'start',this.value)"/>
+        <span style="color:var(--muted);font-size:11px">à</span>
+        <input class="input" type="time" value="${s.end}" style="width:100px;padding:5px 8px;font-size:13px" onchange="updateDaySlot('${wd.date}','${wd.key}',${i},'end',this.value)"/>
+        <button class="btn btn-sm btn-ghost" onclick="removeDaySlot('${wd.date}','${wd.key}',${i})" style="padding:3px 7px;font-size:12px">✕</button>
+      </div>`).join("");
+
+    return `
+    <div style="background:${isToday?'var(--orange-pale)':'#fff'};border:1.5px solid ${isToday?'var(--orange)':'var(--border)'};border-radius:12px;padding:14px 16px;${isPast?'opacity:0.55':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div>
+          <div style="font-weight:800;color:var(--navy);font-size:14px">${wd.label} <span style="color:var(--muted);font-weight:600;font-size:12px">${fmtDate(wd.date)}</span></div>
+          ${isToday?'<span style="font-size:10px;color:var(--orange);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Aujourd\'hui</span>':''}
+          ${isOverridden?'<span style="font-size:10px;color:#7c3aed;font-weight:700;margin-left:6px">● Exception</span>':''}
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" ${effective.enabled?"checked":""} onchange="toggleDayAvail('${wd.date}','${wd.key}',this.checked)" style="width:15px;height:15px;cursor:pointer"/>
+          <span style="font-size:12px;color:var(--muted);font-weight:600">Disponible</span>
+        </label>
+      </div>
+      <div style="${effective.enabled?"":"opacity:0.35;pointer-events:none"}">
+        ${slotsHTML||'<div style="font-size:12px;color:var(--muted);font-style:italic;margin-bottom:6px">Aucun créneau</div>'}
+        <button class="btn btn-sm btn-ghost" onclick="addDaySlot('${wd.date}','${wd.key}')" style="font-size:11px;padding:4px 8px">+ Créneau</button>
+      </div>
+      ${isOverridden?`<button class="btn btn-sm btn-ghost" onclick="clearOverride('${wd.date}')" style="margin-top:8px;font-size:11px;color:#7c3aed">↺ Revenir au modèle habituel</button>`:''}
+    </div>`;
+  }).join("");
+
+  document.getElementById("availability-grid").innerHTML = header + `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">${cards}</div>
+    <div style="margin-top:16px;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px">
+      <span style="color:#7c3aed;font-weight:700">●</span> = jour modifié ponctuellement (n'affecte pas les autres semaines)
+    </div>`;
+}
+
+function shiftAvailWeek(dir){
+  const d=new Date(currentAvailWeekStart);
+  d.setDate(d.getDate()+dir*7);
+  currentAvailWeekStart=isoDate(d);
+  renderAvailability();
+}
+function goToTodayAvailWeek(){
+  currentAvailWeekStart=isoDate(getMondayOf(new Date()));
+  renderAvailability();
+}
+
+// Récupère (ou crée) l'override du jour pour pouvoir le modifier ponctuellement
+function ensureOverride(date,dayKey){
+  if(!availabilityOverrides[date]){
+    const base=availability[dayKey]||{enabled:false,slots:[]};
+    availabilityOverrides[date]={enabled:base.enabled, slots:JSON.parse(JSON.stringify(base.slots||[]))};
   }
+  return availabilityOverrides[date];
+}
+
+function toggleDayAvail(date,dayKey,checked){
+  const ov=ensureOverride(date,dayKey);
+  ov.enabled=checked;
+  if(checked&&(!ov.slots||!ov.slots.length)) ov.slots=[{start:"09:00",end:"18:00"}];
   renderAvailability();
 }
-function addSlot(day){
-  if(!availability[day].slots)availability[day].slots=[];
-  availability[day].slots.push({start:"09:00",end:"18:00"});
+function addDaySlot(date,dayKey){
+  const ov=ensureOverride(date,dayKey);
+  if(!ov.slots)ov.slots=[];
+  ov.slots.push({start:"09:00",end:"18:00"});
   renderAvailability();
 }
-function removeSlot(day,idx){
-  availability[day].slots.splice(idx,1);
+function removeDaySlot(date,dayKey,idx){
+  const ov=ensureOverride(date,dayKey);
+  ov.slots.splice(idx,1);
   renderAvailability();
 }
-function updateSlot(day,idx,field,value){
-  availability[day].slots[idx][field]=value;
+function updateDaySlot(date,dayKey,idx,field,value){
+  const ov=ensureOverride(date,dayKey);
+  ov.slots[idx][field]=value;
+}
+function clearOverride(date){
+  delete availabilityOverrides[date];
+  renderAvailability();
 }
 async function saveAvailability(){
   try{
-    await dbPatch("company_info",{id:1, availability: availability});
+    await dbPatch("company_info",{id:1, availability: availability, availability_overrides: availabilityOverrides});
     notify("✅ Disponibilités enregistrées");
   }catch(e){
     notify("❌ Erreur lors de l'enregistrement");
